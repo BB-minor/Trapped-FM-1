@@ -1129,10 +1129,11 @@ static void texture_gen(uint32_t src, int32_t *l, int32_t *r, uint32_t n)
         uint32_t inc[3];
         for (k = 0; k < 3u; k++) {
             int32_t d;
-            tx.s2.lph[k] += (uint32_t)(260000u + 83000u * k) * n;      /* coprime-ish: never in step */
-            d = sine_i(tx.s2.lph[k]) >> 11;                            /* +-16: a sixteenth of a semitone */
+            tx.s2.lph[k] += (uint32_t)(3900u + 1460u * k) * n;         /* 25, 18 and 14 s a turn: never in step */
+            d = sine_i(tx.s2.lph[k]) >> 13;                            /* +-25 cents: a drift, not a vibrato */
             inc[k] = pitch_inc(clamp(root + IVL[k] + d, 0, 127 * 16));
-            amp[k] = 20000 + (sine_i(tx.s2.lph[k] * 3u + (uint32_t)k * 0x55555555u) >> 2);
+            amp[k] = 20000 + (sine_i(tx.s2.lph[k] * 2u + (uint32_t)k * 0x55555555u) >> 2);   /* breathing,
+                                                     * 12 to 7 s, over the drift */
         }
         for (i = 0; i < n; i++) {
             int32_t v[3], a, b;
