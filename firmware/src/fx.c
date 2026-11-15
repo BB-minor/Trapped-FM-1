@@ -67,18 +67,53 @@ typedef struct {
     int32_t env;                        /* the peak the gain fits under LIM_T (LIM_T: none) */
     int32_t g;                          /* the gain at the end of the last block, Q15 (32768: 1) */
     uint32_t hold;                      /* blocks before the release starts (LIM_HOLD after a peak near env) */
+    int32_t thr;                        /* (INFUR) the threshold it holds peaks under: LIM_T, lifted by CLIP */
 } lim_t;
 /* (2.6, a whistle on loud basses) the release waits LIM_HOLD blocks after the last peak near the envelope: a held bass
  * (down to ~29 Hz, a period under 35 ms) keeps one gain, instead of the gain dipping and creeping back at every cycle
  * (a sawtooth at the bass's pitch with a corner at every block: tones around 1.4 kHz and up) */
 #define LIM_HOLD 48u
 #define LIM_REL 11                      /* the release after the hold: ~46 ms (12 before the hold: ~93 ms; the same loudness) */
-static lim_t lim_dac = {.env = LIM_T, .g = 32768}, lim_usb = {.env = LIM_T, .g = 32768};
+static lim_t lim_dac = {.env = LIM_T, .g = 32768, .thr = LIM_T},
+             lim_usb = {.env = LIM_T, .g = 32768, .thr = LIM_T};
+/* (INFUR) GLO > MASTER 2 > CLIP: the master soft clipper. The output stage already ends in a tanh knee
+ * (KNEE 16384), but the limiter holds peaks at LIM_T, just above it, so the knee stays nearly linear and
+ * chords get quieter instead of crushed. CLIP lifts that threshold, so the mix drives into the knee and
+ * clips instead of ducking -- the trap way round, loudness and transients kept. The limiter is still there
+ * above it as the ceiling, and the knee bounds the output whatever happens, so the DAC is never exposed.
+ * CLIP 0 gives LIM_T back and the output is then bit for bit what it was. */
+#define LIM_CLIP_MAX 56000              /* the limiter's threshold at CLIP 127, above the knee's working range */
+static int32_t clip_amt(void)           /* 0..127 */
+{
+    int32_t c = song.g[G_CLIP];
+    return c < 0 ? 0 : c > 127 ? 127 : c;
+}
+static int32_t clip_thr(void)           /* the limiter yields as the drive comes up, so it does not undo it */
+{
+    int32_t c = clip_amt();
+    return c ? LIM_T + (int32_t)(((int64_t)(LIM_CLIP_MAX - LIM_T) * c) / 127) : LIM_T;
+}
+/* the drive itself: a mix at -9 dBFS never reaches the knee on its own, so lifting the limiter alone does
+ * nothing. CLIP gains the mix into the knee (1x .. ~3.9x) and the knee's tanh does the clipping; the limiter,
+ * lifted to match, only catches what is left. Loudness and transients stay, which is the point of clipping a
+ * trap mix instead of limiting it. */
+static void clip_drive(int32_t *l, int32_t *r, uint32_t n)
+{
+    int32_t c = clip_amt(), g, i;
+    if (!c)
+        return;                         /* CLIP 0: not a sample touched */
+    g = 4096 + c * 95;                  /* Q12 */
+    for (i = 0; i < (int32_t)n; i++) {
+        l[i] = MULQ12R(clamp(l[i], -400000, 400000), g, 2);
+        r[i] = MULQ12R(clamp(r[i], -400000, 400000), g, 2);
+    }
+}
+
 /* l, r: n (<= CTL) samples in; out: the n samples of CTL before, limited (before the knee) */
 static void lim_block(lim_t *s, int32_t *l, int32_t *r, uint32_t n)
 {
     uint32_t i, w = s->w;
-    int32_t pk = 0, a, g0 = s->g, g1, dg, e = s->env;
+    int32_t pk = 0, a, g0 = s->g, g1, dg, e = s->env, t = s->thr > LIM_T ? s->thr : LIM_T;
     for (i = 0; i < CTL; i++) {                         /* the samples going out now and the ones after them (the
                                                          * rest of the delay, then this block): CTL ahead */
         a = s->dl[i] < 0 ? -s->dl[i] : s->dl[i], pk = a > pk ? a : pk;
@@ -92,14 +127,14 @@ static void lim_block(lim_t *s, int32_t *l, int32_t *r, uint32_t n)
         s->hold = LIM_HOLD;
     if (s->hold)
         s->hold--;
-    else if (e > LIM_T)                                 /* the release (after the hold), a block at a time */
-        e -= (int32_t)((((int64_t)(e - LIM_T) * (int32_t)n) >> LIM_REL) + 1);
-    if (e < LIM_T)
-        e = LIM_T;
+    else if (e > t)                                     /* the release (after the hold), a block at a time */
+        e -= (int32_t)((((int64_t)(e - t) * (int32_t)n) >> LIM_REL) + 1);
+    if (e < t)
+        e = t;
     if (pk > e)
         e = pk, s->hold = LIM_HOLD;
     s->env = e;
-    g1 = e > LIM_T ? (int32_t)(((uint32_t)LIM_T << 15) / (uint32_t)e) : 32768;
+    g1 = e > t ? (int32_t)(((uint32_t)t << 15) / (uint32_t)e) : 32768;
     s->g = g1;
     dg = (g1 - g0) / (int32_t)(n ? n : 1u);             /* (towards 0: the gain never above both ends' bound) */
     for (i = 0; i < n; i++) {
@@ -1248,6 +1283,8 @@ static void mix_block(int32_t *out, uint32_t n)
                 master_pre_usb(&ul[i], &ur[i]);
             }
         }
+        clip_drive(ol, orr, n);                     /* (INFUR) CLIP: into the knee, the limiter lifted to match */
+        lim_dac.thr = clip_thr();
         lim_block(&lim_dac, ol, orr, n);
         for (i = 0; i < n; i++) {
             out[2u * i] = knee(ol[i]);
@@ -1255,10 +1292,12 @@ static void mix_block(int32_t *out, uint32_t n)
         }
         if (usb_full_now && !usb_was) {                 /* (a new recording: no old block in its delay) */
             memset(&lim_usb, 0, sizeof lim_usb);
-            lim_usb.env = LIM_T, lim_usb.g = 32768, lim_usb.hold = 0;
+            lim_usb.env = LIM_T, lim_usb.g = 32768, lim_usb.hold = 0, lim_usb.thr = LIM_T;
         }
         usb_was = usb_full_now;
         if (usb_full_now) {
+            clip_drive(ul, ur, n);                  /* (INFUR) a recording sounds as the output does */
+            lim_usb.thr = clip_thr();
             lim_block(&lim_usb, ul, ur, n);
             for (i = 0; i < n; i++) {
                 usb_out[2u * i] = knee(ul[i]);

@@ -203,7 +203,8 @@ static const param_desc_t GP[G_COUNT] = {
     [G_CLKOUT] = PE("CLOCK", N_CLKOUT, 0),       /* 2.7, GLO > MIDI 3: MIDI clock and START / STOP out on USB (seq.c) */
     [G_RMCH] = PE("REMOTE", N_MCH, 0),           /* 2.7, GLO > MIDI 3: the buttons over MIDI (CC 102..115, seq.c remote_cc) */        /* 2.7, GLO > MIDI 3: MIDI notes -> drum sounds (seq.c midi_drum_lane) */            /* 2.7, GLO > MIDI 3: the punch-in FX's channel (seq.c midi_fx) */
     [G_BEND] = PD("BEND", F_SEMI, 1, 12, 2),      /* 2.6, GLO > MIDI 2: MIDI pitch bend's range (a setting of the FM-1) */
-    [G_FXFADE] = PD("FADE", F_INT, 0, 15, 0),     /* 2.7.2: the punch-in FX fade (FX layer SELECT), 0 off .. 15 (punch.c) */
+    [G_FXFADE] = PD("FADE", F_INT, 0, 15, 0),
+    [G_CLIP] = PD("CLIP", F_PCT, 0, 127, 0),     /* (INFUR) GLO > MASTER 2: the master soft clipper (fx.c) */     /* 2.7.2: the punch-in FX fade (FX layer SELECT), 0 off .. 15 (punch.c) */
 };
 
 static const param_desc_t DRUM_KIT_DESC = PE("KIT", DRUM_KIT_NAMES, 0);
@@ -417,6 +418,9 @@ static const page_t PAGES[] = {
     {"VOICE 2", FAM_EDIT, SC_TRACK, GR_NONE, {P_ALLOC, P_DETUNE, P_PAN, P_MUTE}},
     {"GLOBAL", FAM_GLO, SC_GLOBAL, GR_NONE, {G_BPM, G_SWING, G_CLOCK, G_TUNE}},
     {"MASTER", FAM_GLO, SC_GLOBAL, GR_NONE, {G_DUST, G_DUCK, G_FILT, G_ROLL}},
+    {"MASTER 2", FAM_GLO, SC_GLOBAL, GR_NONE, {G_CLIP, G_FXFADE, 0xFF, 0xFF}},   /* (INFUR) the master soft
+                                                     * clipper, and the punch-in fade the comments always said
+                                                     * lived here (it was only on the FX layer's SELECT) */
     {"SYSTEM", FAM_GLO, SC_GLOBAL, GR_NONE, {G_MIDI, G_SYNC, G_ROUTE, G_INFO}},
     {"DRUMS", FAM_GLO, SC_GLOBAL, GR_NONE, {G_DRCH, G_DRLVL, G_DRREV, G_DRDLY}},   /* GM kit on MIDI ch 10 */
     {"MIDI", FAM_GLO, SC_GLOBAL, GR_NONE, {G_CH1, G_CH2, G_CH3, G_DRCH}},   /* 2.6: each track's channel, the drums' too */
