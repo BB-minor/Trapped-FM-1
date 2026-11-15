@@ -1003,7 +1003,7 @@ static struct {
         int32_t hp[2][2];                               /* DRONE: the 12 dB/oct high-pass that leaves
                                                          * the sub to the 808 */
         int32_t vz[2][3][2];                            /* VOX: three formant resonators a side */
-        uint32_t vph;                                   /* VOX: the vowel wandering */
+        uint32_t vph, vvib, sph[3];                     /* VOX: the vowel, the vibrato, the choir */
         uint32_t gph[4], ginc[4], gpos[4], glen[4];     /* GRAIN: four overlapping grains */
         int32_t gpan[4];
         int32_t grnd;
@@ -1153,25 +1153,39 @@ static void texture_gen(uint32_t src, int32_t *l, int32_t *r, uint32_t n)
         break;
     }
     case TX_VOX: {
-        /* (INFUR) a breathy wash: noise through three formants that drift slowly around the dark end of
-         * the vowels (O to U), the two sides a little apart so it is wide. Reuses eng_formant.c's vowel
-         * table and Klatt resonators, so it costs almost nothing but the state.
-         * It is kept away from speech on purpose: a vowel sweeping the whole A-E-I-O-U range every few
-         * seconds at the table's own narrow bandwidths articulates, and an articulating formant bed
-         * sounds like a voice in a horror film. Slow, narrow in range and three times as wide in
-         * bandwidth, the same resonators read as air instead. */
-        int32_t f[3], b[3], j;
+        /* (INFUR) a sung "aah", not a whisper. Noise through vocal formants IS a whisper -- unvoiced
+         * speech is exactly that -- so the first version could only ever sound like someone whispering,
+         * and a slow disembodied whisper reads as menace however the vowel is set. A sung voice needs a
+         * pitched source, so: three band-limited saws a few cents apart (a small choir rather than one
+         * soloist) an octave above NOTE, a gentle 5 Hz vibrato, a little breath over the top, and the
+         * formants moved up by about a fifth of their frequency for a shorter, female vocal tract.
+         * The vowel stays near /a/, which is what a choir sings, and drifts too slowly to articulate. */
+        static const int16_t DET[3] = {-2, 0, 2};       /* +-12 cents: a unison, not a chorus */
+        int32_t f[3], b[3], j, root = clamp(song.g[G_TXNOTE], 48, 79) * 16 + 192, vib;
         fres_t rc[2][3];
-        tx.s2.vph += 2900u * n;                                        /* 34 s a round: a drift, not a word */
+        uint32_t inc[3];
+        tx.s2.vph += 2900u * n;                         /* the vowel drifts over ~34 s */
+        tx.s2.vvib += 487000u * n;                      /* ~5 Hz */
+        vib = sine_i(tx.s2.vvib) >> 14;                 /* +-12 cents */
+        for (k = 0; k < 3u; k++)
+            inc[k] = pitch_inc(clamp(root + DET[k] + vib, 0, 127 * 16));
         for (k = 0; k < 2u; k++) {
-            int32_t pos = 110 + (sine_i(tx.s2.vph + (uint32_t)k * 0x08000000u) >> 11);   /* 94..126: O to U */
+            int32_t pos = 12 + (sine_i(tx.s2.vph + (uint32_t)k * 0x08000000u) >> 12);   /* 4..20: around /a/ */
             vowel_at(clamp(pos, 0, 127) << 8, f, b);
             for (j = 0; j < 3; j++)
-                fres_coef(&rc[k][j], (uint32_t)f[j], (uint32_t)(b[j] * 3));   /* wider: air, not a vowel */
+                fres_coef(&rc[k][j], (uint32_t)((f[j] * 19) >> 4),      /* x1.19: a female vocal tract */
+                          (uint32_t)((b[j] * 3) >> 1));                 /* a little wider than spoken */
         }
-        for (i = 0; i < n; i++)
+        for (i = 0; i < n; i++) {
+            int32_t src = 0, x;
+            for (k = 0; k < 3u; k++) {
+                tx.s2.sph[k] += inc[k];
+                src += osc_saw(tx.s2.sph[k], inc[k]);
+            }
+            src = (src >> 5) + (tx_n16() >> 7);         /* the choir, and a breath over it (three
+                                                         * resonators in cascade have gain: keep it low) */
             for (k = 0; k < 2u; k++) {
-                int32_t x = tx_n16() >> 3;
+                x = src;
                 for (j = 0; j < 3; j++) {
                     int32_t *z = tx.s2.vz[k][j];
                     int32_t y = (int32_t)(((int64_t)rc[k][j].a * x + (int64_t)rc[k][j].b * z[0]
@@ -1181,6 +1195,7 @@ static void texture_gen(uint32_t src, int32_t *l, int32_t *r, uint32_t n)
                 }
                 (k ? r : l)[i] = clamp(x, -32767, 32767);
             }
+        }
         break;
     }
     case TX_GRAIN: {
@@ -1227,7 +1242,7 @@ static void texture_mix(int32_t *l, int32_t *r, uint32_t n)
     static const uint8_t BARS[5] = {1, 2, 4, 8, 16};
     uint32_t src = (uint32_t)clamp(song.g[G_TXSRC], 0, TX_N - 1), i, bar;
     /* the sources to about 8000 rms (VINYL ~5000: its crackle peaks), Q8; the user slots as they are (/ 2) */
-    static const int16_t TX_SCALE[TX_USR1 + 1] = {0, 800, 301, 587, 2308, 1014, 256};
+    static const int16_t TX_SCALE[TX_USR1 + 1] = {0, 800, 301, 587, 802, 943, 256};
                                                     /* VINYL and TAPE as they were; (INFUR) DRONE, VOX and
                                                      * WASH measured to the same ~8000 rms the others use */
     int32_t lvl = clamp(song.g[G_TXLVL], 0, 127), on, g0, g1, mv, depth, u, lfo, k0, k1, sc;
