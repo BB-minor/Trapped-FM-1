@@ -93,6 +93,28 @@ static int32_t clip_thr(void)           /* the limiter yields as the drive comes
     int32_t c = clip_amt();
     return c ? LIM_T + (int32_t)(((int64_t)(LIM_CLIP_MAX - LIM_T) * c) / 127) : LIM_T;
 }
+/* (INFUR) VOX's vowels. eng_formant.c's VOWEL_F is Hillenbrand et al. (1995) adult MALE means and the
+ * VOICE engine plays from it, so it is left alone; these are the same study's adult FEMALE means, for
+ * the same five vowels in the same order (/a/ hod, /E/ head, /i/ heed, /o/ hoed, /u/ who'd), taken from
+ * the h95 dataset. They are not the male values scaled: the woman / man ratio runs from 1.12 to 1.28
+ * depending on the vowel and the formant, which is why a single factor only ever sounds like a man
+ * pitched up. The bandwidths stay the male table's (the study publishes no female bandwidths). */
+static const uint16_t VOX_F[5][3] = {
+    {921, 1524, 2831}, {727, 2062, 2952}, {437, 2761, 3378}, {555, 1035, 2828}, {459, 1105, 2735},
+};
+static void vox_vowel_at(int32_t pos, int32_t *f, int32_t *b)   /* as vowel_at, the female table */
+{
+    int32_t x = (clamp(pos, 0, 127 << 8) * 33027) >> 20, i = x >> 8, fr = x & 255, j;
+    if (i >= 4) {
+        i = 3;
+        fr = 256;
+    }
+    for (j = 0; j < 3; j++) {
+        f[j] = (VOX_F[i][j] << 4) + (((VOX_F[i + 1][j] - VOX_F[i][j]) * fr) >> 4);
+        b[j] = (VOWEL_B[i][j] << 4) + (((VOWEL_B[i + 1][j] - VOWEL_B[i][j]) * fr) >> 4);
+    }
+}
+
 /* (INFUR) the output ceiling: MASTER is applied before the clipper, so turning it down takes the drive
  * with it. CEIL is the other half a clipper needs -- a trim after the knee, in quarter-dB steps, so the
  * output lands where you put it however hard CLIP drives. 0 is off and not a sample is touched. */
@@ -1004,6 +1026,7 @@ static struct {
                                                          * the sub to the 808 */
         int32_t vz[2][3][2];                            /* VOX: three formant resonators a side */
         uint32_t vph, vvib, sph[3];                     /* VOX: the vowel, the vibrato, the choir */
+        int32_t vtilt;                                  /* VOX: the source's spectral tilt */
         uint32_t gph[4], ginc[4], gpos[4], glen[4];     /* GRAIN: four overlapping grains */
         int32_t gpan[4];
         int32_t grnd;
@@ -1164,17 +1187,17 @@ static void texture_gen(uint32_t src, int32_t *l, int32_t *r, uint32_t n)
         int32_t f[3], b[3], j, root = clamp(song.g[G_TXNOTE], 48, 79) * 16 + 192, vib;
         fres_t rc[2][3];
         uint32_t inc[3];
-        tx.s2.vph += 2900u * n;                         /* the vowel drifts over ~34 s */
+        tx.s2.vph += 4060u * n;                         /* right across the vowels, ~24 s a round */
         tx.s2.vvib += 487000u * n;                      /* ~5 Hz */
         vib = sine_i(tx.s2.vvib) >> 14;                 /* +-12 cents */
         for (k = 0; k < 3u; k++)
             inc[k] = pitch_inc(clamp(root + DET[k] + vib, 0, 127 * 16));
         for (k = 0; k < 2u; k++) {
-            int32_t pos = 12 + (sine_i(tx.s2.vph + (uint32_t)k * 0x08000000u) >> 12);   /* 4..20: around /a/ */
-            vowel_at(clamp(pos, 0, 127) << 8, f, b);
+            int32_t pos = 64 + (sine_i(tx.s2.vph + (uint32_t)k * 0x08000000u) >> 9);   /* the whole run,
+                                                     * /a/ to /u/, the two sides a little apart */
+            vox_vowel_at(clamp(pos, 0, 127) << 8, f, b);
             for (j = 0; j < 3; j++)
-                fres_coef(&rc[k][j], (uint32_t)((f[j] * 19) >> 4),      /* x1.19: a female vocal tract */
-                          (uint32_t)((b[j] * 3) >> 1));                 /* a little wider than spoken */
+                fres_coef(&rc[k][j], (uint32_t)f[j], (uint32_t)((b[j] * 3) >> 1));   /* wider than spoken */
         }
         for (i = 0; i < n; i++) {
             int32_t src = 0, x;
@@ -1184,6 +1207,10 @@ static void texture_gen(uint32_t src, int32_t *l, int32_t *r, uint32_t n)
             }
             src = (src >> 5) + (tx_n16() >> 7);         /* the choir, and a breath over it (three
                                                          * resonators in cascade have gain: keep it low) */
+            tx.s2.vtilt += (src - tx.s2.vtilt) >> 2;    /* a glottal pulse falls off about twice as fast
+                                                         * as a saw: without this tilt the source buzzes
+                                                         * and no formant makes it sound sung */
+            src = tx.s2.vtilt;
             for (k = 0; k < 2u; k++) {
                 x = src;
                 for (j = 0; j < 3; j++) {
@@ -1242,7 +1269,7 @@ static void texture_mix(int32_t *l, int32_t *r, uint32_t n)
     static const uint8_t BARS[5] = {1, 2, 4, 8, 16};
     uint32_t src = (uint32_t)clamp(song.g[G_TXSRC], 0, TX_N - 1), i, bar;
     /* the sources to about 8000 rms (VINYL ~5000: its crackle peaks), Q8; the user slots as they are (/ 2) */
-    static const int16_t TX_SCALE[TX_USR1 + 1] = {0, 800, 301, 587, 802, 943, 256};
+    static const int16_t TX_SCALE[TX_USR1 + 1] = {0, 800, 301, 587, 859, 943, 256};
                                                     /* VINYL and TAPE as they were; (INFUR) DRONE, VOX and
                                                      * WASH measured to the same ~8000 rms the others use */
     int32_t lvl = clamp(song.g[G_TXLVL], 0, 127), on, g0, g1, mv, depth, u, lfo, k0, k1, sc;
