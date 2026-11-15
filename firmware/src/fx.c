@@ -989,7 +989,7 @@ static int32_t master_cur = -1;                        /* the volume knob, rampe
  *   ROOM   room tone: a low rumble and a little air
  * Its level: x * LEVEL^2 / 16384 into the mix (the sources at about 8000 rms: LEVEL 64 about -30 dBFS rms out, 127
  * about -18). Off (and faded out): nothing runs, the mix bit for bit as without */
-enum { TX_OFF, TX_VINYL, TX_TAPE, TX_DRONE, TX_VOX, TX_WASH, TX_USR1, TX_N = TX_USR1 + 4 };
+enum { TX_OFF, TX_VINYL, TX_TAPE, TX_DRONE, TX_VOX, TX_GRAIN, TX_USR1, TX_N = TX_USR1 + 4 };
 static struct {
     int32_t rnd;                                        /* noise state (never 0) */
     int32_t g;                                          /* gain now (Q15 of the LEVEL target), ramped a block */
@@ -1004,7 +1004,7 @@ static struct {
                                                          * the sub to the 808 */
         int32_t vz[2][3][2];                            /* VOX: three formant resonators a side */
         uint32_t vph;                                   /* VOX: the vowel wandering */
-        uint32_t gph[4], ginc[4], gpos[4], glen[4];     /* WASH: four overlapping grains */
+        uint32_t gph[4], ginc[4], gpos[4], glen[4];     /* GRAIN: four overlapping grains */
         int32_t gpan[4];
         int32_t grnd;
     } s2;
@@ -1153,17 +1153,21 @@ static void texture_gen(uint32_t src, int32_t *l, int32_t *r, uint32_t n)
         break;
     }
     case TX_VOX: {
-        /* (INFUR) a breathy choir wash: noise through the three formants of a vowel that wanders across
-         * A E I O U, the two sides on vowels a little apart so it is wide. Reuses eng_formant.c's vowel
-         * table and Klatt resonators, so it costs almost nothing but the state. */
+        /* (INFUR) a breathy wash: noise through three formants that drift slowly around the dark end of
+         * the vowels (O to U), the two sides a little apart so it is wide. Reuses eng_formant.c's vowel
+         * table and Klatt resonators, so it costs almost nothing but the state.
+         * It is kept away from speech on purpose: a vowel sweeping the whole A-E-I-O-U range every few
+         * seconds at the table's own narrow bandwidths articulates, and an articulating formant bed
+         * sounds like a voice in a horror film. Slow, narrow in range and three times as wide in
+         * bandwidth, the same resonators read as air instead. */
         int32_t f[3], b[3], j;
         fres_t rc[2][3];
-        tx.s2.vph += 36000u * n;                                       /* a slow round of the vowels */
+        tx.s2.vph += 2900u * n;                                        /* 34 s a round: a drift, not a word */
         for (k = 0; k < 2u; k++) {
-            int32_t pos = ((sine_i(tx.s2.vph + (uint32_t)k * 0x30000000u) + 32768) >> 9) << 8;
-            vowel_at(pos, f, b);
+            int32_t pos = 110 + (sine_i(tx.s2.vph + (uint32_t)k * 0x08000000u) >> 11);   /* 94..126: O to U */
+            vowel_at(clamp(pos, 0, 127) << 8, f, b);
             for (j = 0; j < 3; j++)
-                fres_coef(&rc[k][j], (uint32_t)f[j], (uint32_t)b[j]);
+                fres_coef(&rc[k][j], (uint32_t)f[j], (uint32_t)(b[j] * 3));   /* wider: air, not a vowel */
         }
         for (i = 0; i < n; i++)
             for (k = 0; k < 2u; k++) {
@@ -1179,10 +1183,11 @@ static void texture_gen(uint32_t src, int32_t *l, int32_t *r, uint32_t n)
             }
         break;
     }
-    case TX_WASH: {
+    case TX_GRAIN: {
         /* (INFUR) a granular bed that feeds on nothing: four overlapping grains, each a sine windowed by
-         * a raised cosine, respawning at a note of the drone's chord an octave or two up, panned at
-         * random. No buffer and no tap on the mix, so it cannot feed back. */
+         * a raised cosine, respawning at a note of the drone's chord an octave up, panned at random. No
+         * buffer and no tap on the mix, so unlike granulating the punch ring it cannot feed back. The
+         * grains are seconds long, not tenths: short ones read as a flutter, not as a bed. */
         static const int16_t CHORD[6] = {0, 48, 112, 192, 240, 304};   /* root 3rd 5th 8ve 10th 12th */
         int32_t root = clamp(song.g[G_TXNOTE], 48, 79) * 16;
         for (i = 0; i < n; i++) {
@@ -1191,7 +1196,7 @@ static void texture_gen(uint32_t src, int32_t *l, int32_t *r, uint32_t n)
                 int32_t w, g;
                 if (tx.s2.gpos[k] >= tx.s2.glen[k]) {                  /* respawn */
                     uint32_t z = noise32(&tx.s2.grnd);
-                    tx.s2.glen[k] = (uint32_t)FS / 8u + (z & 16383u);   /* 0.12 .. 0.5 s */
+                    tx.s2.glen[k] = (uint32_t)FS + (z & 131071u);       /* 1.0 .. 4.0 s */
                     tx.s2.gpos[k] = 0;
                     tx.s2.gph[k] = z << 13;
                     tx.s2.ginc[k] = pitch_inc(clamp(root + CHORD[(z >> 5) % 6u] + 192, 0, 127 * 16));
@@ -1222,7 +1227,7 @@ static void texture_mix(int32_t *l, int32_t *r, uint32_t n)
     static const uint8_t BARS[5] = {1, 2, 4, 8, 16};
     uint32_t src = (uint32_t)clamp(song.g[G_TXSRC], 0, TX_N - 1), i, bar;
     /* the sources to about 8000 rms (VINYL ~5000: its crackle peaks), Q8; the user slots as they are (/ 2) */
-    static const int16_t TX_SCALE[TX_USR1 + 1] = {0, 800, 301, 568, 1304, 1028, 256};
+    static const int16_t TX_SCALE[TX_USR1 + 1] = {0, 800, 301, 587, 2308, 1014, 256};
                                                     /* VINYL and TAPE as they were; (INFUR) DRONE, VOX and
                                                      * WASH measured to the same ~8000 rms the others use */
     int32_t lvl = clamp(song.g[G_TXLVL], 0, 127), on, g0, g1, mv, depth, u, lfo, k0, k1, sc;
