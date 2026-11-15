@@ -105,6 +105,10 @@ enum {                          /* global parameters */
                                  * while SYNC is INT (seq.c clkout_block; a setting of the FM-1, kept in DR MAP's byte) */
     G_FXFADE,                   /* SLOOP 2.7.2, the FX layer (FX held), SELECT: how fast a punch-in FX fades in and out, 0 (instant, as
                                  * before) .. 15 (punch.c; a setting of the FM-1, kept in BEND's byte) */
+    G_CEIL,                     /* (INFUR) GLO > MASTER 2: the output ceiling after the knee, 0 (off, as before) .. 24
+                                 * in quarter-dB steps, so -6.0 dB at 24 (fx.c CEIL_Q15). CLIP drives, CEIL sets where
+                                 * the output lands: a mastering ceiling (-2.0 dB = 8) that the drive cannot push past.
+                                 * A setting of the FM-1 (it belongs to the output, not to a song), kept with CLIP */
     G_CLIP,                     /* (INFUR) GLO > MASTER 2: the master soft clipper's drive, 0 off (fx.c clip_thr: it
                                  * lifts the limiter's threshold so the mix drives the output knee). In a project
                                  * (project.c: the spare bits of the byte TEXTURE's MOVE rides in) */

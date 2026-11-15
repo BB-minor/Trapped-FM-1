@@ -93,6 +93,18 @@ static int32_t clip_thr(void)           /* the limiter yields as the drive comes
     int32_t c = clip_amt();
     return c ? LIM_T + (int32_t)(((int64_t)(LIM_CLIP_MAX - LIM_T) * c) / 127) : LIM_T;
 }
+/* (INFUR) the output ceiling: MASTER is applied before the clipper, so turning it down takes the drive
+ * with it. CEIL is the other half a clipper needs -- a trim after the knee, in quarter-dB steps, so the
+ * output lands where you put it however hard CLIP drives. 0 is off and not a sample is touched. */
+static const uint16_t CEIL_Q15[25] = {32768, 31838, 30935, 30057, 29205, 28376, 27571, 26789, 26029,
+                                      25290, 24573, 23875, 23198, 22540, 21900, 21279, 20675, 20089,
+                                      19519, 18965, 18427, 17904, 17396, 16902, 16423};
+static inline int32_t out_ceil(int32_t x)
+{
+    int32_t c = song.g[G_CEIL];
+    return c > 0 ? mulq15(x, (int32_t)CEIL_Q15[c < 24 ? c : 24]) : x;
+}
+
 /* the drive itself: a mix at -9 dBFS never reaches the knee on its own, so lifting the limiter alone does
  * nothing. CLIP gains the mix into the knee (1x .. ~3.9x) and the knee's tanh does the clipping; the limiter,
  * lifted to match, only catches what is left. Loudness and transients stay, which is the point of clipping a
@@ -1287,8 +1299,8 @@ static void mix_block(int32_t *out, uint32_t n)
         lim_dac.thr = clip_thr();
         lim_block(&lim_dac, ol, orr, n);
         for (i = 0; i < n; i++) {
-            out[2u * i] = knee(ol[i]);
-            out[2u * i + 1u] = knee(orr[i]);
+            out[2u * i] = out_ceil(knee(ol[i]));            /* (INFUR) CEIL: the mastering ceiling */
+            out[2u * i + 1u] = out_ceil(knee(orr[i]));
         }
         if (usb_full_now && !usb_was) {                 /* (a new recording: no old block in its delay) */
             memset(&lim_usb, 0, sizeof lim_usb);
@@ -1300,8 +1312,8 @@ static void mix_block(int32_t *out, uint32_t n)
             lim_usb.thr = clip_thr();
             lim_block(&lim_usb, ul, ur, n);
             for (i = 0; i < n; i++) {
-                usb_out[2u * i] = knee(ul[i]);
-                usb_out[2u * i + 1u] = knee(ur[i]);
+                usb_out[2u * i] = out_ceil(knee(ul[i]));    /* (INFUR) a recording lands where the output does */
+                usb_out[2u * i + 1u] = out_ceil(knee(ur[i]));
             }
         }
     }
