@@ -91,6 +91,9 @@ enum {                          /* global parameters */
     G_CHOTH,                    /* .. and what the other channels play: 0 SEL (the selected track), 1 OFF. Settings of
                                  * the FM-1 (with G_DRCH): not in a project (project.c, panel.c midi_set) */
     G_TXSRC, G_TXLVL, G_TXTONE, G_TXMOVE,   /* SLOOP 2.6, GLO > TEXTURE: a looping bed under the mix (fx.c texture_*): */
+    G_TXNOTE,                   /* (INFUR) GLO > TEXTURE 2: the root DRONE and WASH sing on, MIDI note 48..79
+                                 * (C3..G5). Above the 808's octave on purpose, and the DRONE high-passes itself
+                                 * at ~110 Hz as well. In a project (project.c: rsv[1], bits 3..7) */
     G_TXRATE, G_TXWHEN, G_TXDUCK,           /* its source, level, tone, movement; its rate, when it plays, the DUCK pump.
                                              * In a project (project.c: the spare bytes) */
     G_BEND,                     /* SLOOP 2.6, GLO > MIDI 2: the pitch bend's range, 1..12 semitones (a setting of the FM-1) */

@@ -399,7 +399,10 @@ UI_SMALL static void proj_tx_put(project_t *p)
 {
     p->rsv[0] = (uint8_t)(0x80u | ((uint32_t)song.g[G_TXSRC] & 15u) | ((uint32_t)song.g[G_TXWHEN] & 1u) << 4 |
                           ((uint32_t)song.g[G_TXDUCK] & 1u) << 5 | 0x40u);   /* (0x40: saved by 2.7 or later) */
-    p->rsv[1] = (uint8_t)song.g[G_TXRATE];
+    p->rsv[1] = (uint8_t)(((uint32_t)song.g[G_TXRATE] & 7u) |
+                          ((uint32_t)(clamp(song.g[G_TXNOTE], 48, 79) - 48) & 31u) << 3);
+                                        /* (INFUR) RATE in bits 0-2 as before, the DRONE's root in 3-7
+                                         * (note - 48): an older project reads 0 there, so note 48 */
     p->g[G_DRCH] = (int16_t)((song.g[G_TXLVL] & 127) | ((song.g[G_TXTONE] + 64) & 127) << 7);
     p->g[G_INFO] = (int16_t)((song.g[G_TXMOVE] & 127) | ((uint32_t)(song.g[G_CLIP] & 127) << 7));
                                         /* (INFUR) MOVE in bits 0-6 as before, the master CLIP in 7-13: an
@@ -408,19 +411,20 @@ UI_SMALL static void proj_tx_put(project_t *p)
 }
 static void proj_tx_get(const project_t *p)
 {
-    static const uint8_t ID[7] = {G_TXSRC, G_TXLVL, G_TXTONE, G_TXMOVE, G_TXRATE, G_TXWHEN, G_TXDUCK};
-    int32_t v[7];
+    static const uint8_t ID[8] = {G_TXSRC, G_TXLVL, G_TXTONE, G_TXMOVE, G_TXRATE, G_TXWHEN, G_TXDUCK, G_TXNOTE};
+    int32_t v[8];
     uint32_t i;
     if (!(p->rsv[0] & 0x80u)) {
-        for (i = 0; i < 7u; i++)
+        for (i = 0; i < 8u; i++)
             v[i] = GP[ID[i]].def;
         song.g[G_CLIP] = 0;                         /* (INFUR) a project from before the clipper: off */
     } else {
-        v[0] = p->rsv[0] & 15u, v[5] = (p->rsv[0] >> 4) & 1u, v[6] = (p->rsv[0] >> 5) & 1u, v[4] = p->rsv[1];
+        v[0] = p->rsv[0] & 15u, v[5] = (p->rsv[0] >> 4) & 1u, v[6] = (p->rsv[0] >> 5) & 1u;
+        v[4] = p->rsv[1] & 7u, v[7] = 48 + ((p->rsv[1] >> 3) & 31u);   /* (INFUR) RATE, the DRONE's root */
         v[1] = p->g[G_DRCH] & 127, v[2] = ((p->g[G_DRCH] >> 7) & 127) - 64, v[3] = p->g[G_INFO] & 127;
         song.g[G_CLIP] = (int16_t)clamp((p->g[G_INFO] >> 7) & 127, GP[G_CLIP].min, GP[G_CLIP].max);
     }
-    for (i = 0; i < 7u; i++)
+    for (i = 0; i < 8u; i++)
         song.g[ID[i]] = (int16_t)clamp(v[i], GP[ID[i]].min, GP[ID[i]].max);
 }
 

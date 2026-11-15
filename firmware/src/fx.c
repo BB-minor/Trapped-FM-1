@@ -989,7 +989,7 @@ static int32_t master_cur = -1;                        /* the volume knob, rampe
  *   ROOM   room tone: a low rumble and a little air
  * Its level: x * LEVEL^2 / 16384 into the mix (the sources at about 8000 rms: LEVEL 64 about -30 dBFS rms out, 127
  * about -18). Off (and faded out): nothing runs, the mix bit for bit as without */
-enum { TX_OFF, TX_VINYL, TX_TAPE, TX_RAIN, TX_WIND, TX_RADIO, TX_ROOM, TX_USR1, TX_N = TX_USR1 + 4 };
+enum { TX_OFF, TX_VINYL, TX_TAPE, TX_DRONE, TX_VOX, TX_WASH, TX_USR1, TX_N = TX_USR1 + 4 };
 static struct {
     int32_t rnd;                                        /* noise state (never 0) */
     int32_t g;                                          /* gain now (Q15 of the LEVEL target), ramped a block */
@@ -998,8 +998,16 @@ static struct {
     int32_t a[2], b[2], c[2], d[2], e[2];               /* per side: the sources' states (see texture_gen) */
     int32_t lpm[2];                                     /* MOVE's brightness (one-pole) */
     int32_t t0, t1, t2;                                 /* slow random walks / timers */
-    tsvf_t wc[2];                                       /* WIND: this block's filters */
-    int32_t wz[2][2];
+    struct {                                            /* (INFUR) DRONE, VOX and WASH */
+        uint32_t ph[3], lph[3];                         /* DRONE: the partials, their drift */
+        int32_t hp[2][2];                               /* DRONE: the 12 dB/oct high-pass that leaves
+                                                         * the sub to the 808 */
+        int32_t vz[2][3][2];                            /* VOX: three formant resonators a side */
+        uint32_t vph;                                   /* VOX: the vowel wandering */
+        uint32_t gph[4], ginc[4], gpos[4], glen[4];     /* WASH: four overlapping grains */
+        int32_t gpan[4];
+        int32_t grnd;
+    } s2;
     uint32_t upos, ufrac;                               /* USR: the read position, Q16 fraction */
     int32_t up, ui, us0, us1;                           /* USR: ADPCM predictor, step index, the two samples interpolated */
     uint32_t ugen;                                      /* USR: the slots' scan count (an upload restarts it) */
@@ -1018,7 +1026,9 @@ static void texture_reset(uint32_t src)
     tx.rnd = rnd ? rnd : 0x2545F491;
     tx.g = g, tx.ph = ph, tx.play = play;
     tx.src = (uint8_t)src;
-    tx.t0 = 50 << 8, tx.t1 = 60 << 8;                  /* (WIND: the two cutoffs, RADIO / TAPE: the level) */
+    tx.t0 = 50 << 8, tx.t1 = 60 << 8;                  /* (TAPE: the level) */
+    tx.s2.grnd = (int32_t)((uint32_t)tx.rnd ^ 0x5BF03635u);   /* (INFUR) never 0: an xorshift from 0 stays 0,
+                                                       * and WASH's four grains would spawn alike */
     tx.ugen = smp_user_gen - 1u;                        /* (USR: the zone looked up on the first block) */
 }
 /* USR k: the next sample of its first zone, looped (sample_next's decoder, its own state) */
@@ -1109,61 +1119,96 @@ static void texture_gen(uint32_t src, int32_t *l, int32_t *r, uint32_t n)
                 (k ? r : l)[i] = (((tx.a[k] >> 1) + (w >> 3)) * (tx.t0 >> 8)) >> 5;
             }
         break;
-    case TX_RAIN:                                       /* a: the bed's low-pass, b: a droplet's level, c: its noise */
-        for (i = 0; i < n; i++)
-            for (k = 0; k < 2u; k++) {
-                uint32_t z = noise32(&tx.rnd);
-                int32_t w = (int32_t)(z >> 16) - 32768;
-                tx.a[k] += (w - tx.a[k]) >> 4;          /* the bed: ~450 Hz */
-                if ((z & 0xFFFFu) < 420u)               /* a droplet: ~280 a second a side */
-                    tx.b[k] = 4000 + (int32_t)((z >> 4) & 0x3FFFu);
-                tx.c[k] += (w - tx.c[k]) >> 1;
-                (k ? r : l)[i] = (tx.a[k] >> 1) + (((w - tx.c[k]) * tx.b[k]) >> 14);
-                tx.b[k] -= tx.b[k] >> 5;
+    case TX_DRONE: {
+        /* (INFUR) a tonal bed that never repeats: three partials (root, fifth, octave) whose pitch and
+         * level drift on slow LFOs of their own, the fifth and the octave spread left and right. A fixed
+         * 12 dB/oct high-pass at ~110 Hz keeps it out of the 808's octave by construction, whatever the
+         * root is set to. ~20 ops a sample. */
+        static const int16_t IVL[3] = {0, 112, 192};    /* root, fifth, octave, in 1/16 semitone */
+        int32_t root = clamp(song.g[G_TXNOTE], 48, 79) * 16, amp[3];
+        uint32_t inc[3];
+        for (k = 0; k < 3u; k++) {
+            int32_t d;
+            tx.s2.lph[k] += (uint32_t)(260000u + 83000u * k) * n;      /* coprime-ish: never in step */
+            d = sine_i(tx.s2.lph[k]) >> 11;                            /* +-16: a sixteenth of a semitone */
+            inc[k] = pitch_inc(clamp(root + IVL[k] + d, 0, 127 * 16));
+            amp[k] = 20000 + (sine_i(tx.s2.lph[k] * 3u + (uint32_t)k * 0x55555555u) >> 2);
+        }
+        for (i = 0; i < n; i++) {
+            int32_t v[3], a, b;
+            for (k = 0; k < 3u; k++) {
+                tx.s2.ph[k] += inc[k];
+                v[k] = mulq15(sine_i(tx.s2.ph[k]), amp[k]) >> 2;
             }
+            a = v[0] + v[1], b = v[0] + v[2];                          /* the spread */
+            for (k = 0; k < 2u; k++) {                                 /* two one-pole high-passes */
+                int32_t x = k ? b : a;
+                tx.s2.hp[k][0] += (x - tx.s2.hp[k][0]) >> 6;
+                x -= tx.s2.hp[k][0];
+                tx.s2.hp[k][1] += (x - tx.s2.hp[k][1]) >> 6;
+                (k ? r : l)[i] = x - tx.s2.hp[k][1];
+            }
+        }
         break;
-    case TX_WIND: {                                     /* t0, t1: the cutoffs wandering (Q8 index), t2: their targets */
-        if (!(noise32(&tx.rnd) & 31u))
-            tx.t2 = (int32_t)(noise32(&tx.rnd) & 0xFFFFu);   /* new targets now and then: 34 .. 78 */
-        tx.t0 += (((34 << 8) + (tx.t2 & 0xFF) * 44) - tx.t0) >> 7;
-        tx.t1 += (((34 << 8) + (tx.t2 >> 8) * 44) - tx.t1) >> 7;
-        tsvf_coef(&tx.wc[0], tx.t0, 95);
-        tsvf_coef(&tx.wc[1], tx.t1, 95);
+    }
+    case TX_VOX: {
+        /* (INFUR) a breathy choir wash: noise through the three formants of a vowel that wanders across
+         * A E I O U, the two sides on vowels a little apart so it is wide. Reuses eng_formant.c's vowel
+         * table and Klatt resonators, so it costs almost nothing but the state. */
+        int32_t f[3], b[3], j;
+        fres_t rc[2][3];
+        tx.s2.vph += 36000u * n;                                       /* a slow round of the vowels */
+        for (k = 0; k < 2u; k++) {
+            int32_t pos = ((sine_i(tx.s2.vph + (uint32_t)k * 0x30000000u) + 32768) >> 9) << 8;
+            vowel_at(pos, f, b);
+            for (j = 0; j < 3; j++)
+                fres_coef(&rc[k][j], (uint32_t)f[j], (uint32_t)b[j]);
+        }
         for (i = 0; i < n; i++)
             for (k = 0; k < 2u; k++) {
-                int32_t y = tsvf_lp(&tx.wc[k], tx_n16() >> 2, &tx.wz[k][0], &tx.wz[k][1]);
-                (k ? r : l)[i] = clamp(y, -32767, 32767);
+                int32_t x = tx_n16() >> 3;
+                for (j = 0; j < 3; j++) {
+                    int32_t *z = tx.s2.vz[k][j];
+                    int32_t y = (int32_t)(((int64_t)rc[k][j].a * x + (int64_t)rc[k][j].b * z[0]
+                                           + (int64_t)rc[k][j].c * z[1]) >> 30);
+                    z[1] = z[0], z[0] = y;
+                    x = y;
+                }
+                (k ? r : l)[i] = clamp(x, -32767, 32767);
             }
         break;
     }
-    case TX_RADIO:                                      /* a, b: the band's two low-passes, t0: the burst level (Q8),
-                                                         * t1: samples left of the burst, c: the held sample */
-        if ((tx.t1 -= (int32_t)n) <= 0) {
-            uint32_t z = noise32(&tx.rnd);
-            tx.t1 = 1500 + (int32_t)((z >> 8) & 0x3FFFu);   /* 35 .. 400 ms */
-            tx.t2 = (z & 3u) == 0u ? 40 << 8 : (110 + (int32_t)((z >> 24) & 0x7Fu)) << 8;   /* (a gap now and then) */
-        }
-        tx.t0 += (tx.t2 - tx.t0) >> 2;
+    case TX_WASH: {
+        /* (INFUR) a granular bed that feeds on nothing: four overlapping grains, each a sine windowed by
+         * a raised cosine, respawning at a note of the drone's chord an octave or two up, panned at
+         * random. No buffer and no tap on the mix, so it cannot feed back. */
+        static const int16_t CHORD[6] = {0, 48, 112, 192, 240, 304};   /* root 3rd 5th 8ve 10th 12th */
+        int32_t root = clamp(song.g[G_TXNOTE], 48, 79) * 16;
         for (i = 0; i < n; i++) {
-            int32_t w = tx_n16(), y;
-            if (!(i & 3u))
-                tx.c[0] = w;                            /* coarse: held four samples */
-            tx.a[0] += (tx.c[0] - tx.a[0]) >> 1;        /* < ~3 kHz */
-            tx.b[0] += (tx.a[0] - tx.b[0]) >> 4;        /* the lows taken out: > ~500 Hz */
-            y = (((tx.a[0] - tx.b[0]) >> 1) * (tx.t0 >> 8)) >> 6;
-            l[i] = y;
-            r[i] = y - (y >> 2);
+            int32_t al = 0, ar = 0;
+            for (k = 0; k < 4u; k++) {
+                int32_t w, g;
+                if (tx.s2.gpos[k] >= tx.s2.glen[k]) {                  /* respawn */
+                    uint32_t z = noise32(&tx.s2.grnd);
+                    tx.s2.glen[k] = (uint32_t)FS / 8u + (z & 16383u);   /* 0.12 .. 0.5 s */
+                    tx.s2.gpos[k] = 0;
+                    tx.s2.gph[k] = z << 13;
+                    tx.s2.ginc[k] = pitch_inc(clamp(root + CHORD[(z >> 5) % 6u] + 192, 0, 127 * 16));
+                    tx.s2.gpan[k] = (int32_t)((z >> 9) & 32767u);
+                }
+                w = 32767 - sine_i(0x40000000u + (uint32_t)(((uint64_t)tx.s2.gpos[k] << 32)
+                                                            / tx.s2.glen[k]));   /* raised cosine */
+                tx.s2.gph[k] += tx.s2.ginc[k];
+                tx.s2.gpos[k]++;
+                g = mulq15(sine_i(tx.s2.gph[k]), w >> 1) >> 3;   /* four of them sum: room for all */
+                al += mulq15(g, 32767 - tx.s2.gpan[k]);
+                ar += mulq15(g, tx.s2.gpan[k]);
+            }
+            l[i] = clamp(al, -32767, 32767);
+            r[i] = clamp(ar, -32767, 32767);
         }
         break;
-    case TX_ROOM:                                       /* a: the rumble, b: its low-pass, c: air */
-        for (i = 0; i < n; i++)
-            for (k = 0; k < 2u; k++) {
-                int32_t w = tx_n16();
-                tx.a[k] += (w >> 4) - (tx.a[k] >> 8);
-                tx.b[k] += (tx.a[k] - tx.b[k]) >> 5;
-                (k ? r : l)[i] = (tx.b[k] >> 1) + (w >> 6);
-            }
-        break;
+    }
     default:
         for (i = 0; i < n; i++)
             l[i] = r[i] = 0;
@@ -1176,7 +1221,9 @@ static void texture_mix(int32_t *l, int32_t *r, uint32_t n)
     static const uint8_t BARS[5] = {1, 2, 4, 8, 16};
     uint32_t src = (uint32_t)clamp(song.g[G_TXSRC], 0, TX_N - 1), i, bar;
     /* the sources to about 8000 rms (VINYL ~5000: its crackle peaks), Q8; the user slots as they are (/ 2) */
-    static const int16_t TX_SCALE[TX_USR1 + 1] = {0, 800, 301, 693, 1918, 149, 343, 256};
+    static const int16_t TX_SCALE[TX_USR1 + 1] = {0, 800, 301, 568, 1304, 1028, 256};
+                                                    /* VINYL and TAPE as they were; (INFUR) DRONE, VOX and
+                                                     * WASH measured to the same ~8000 rms the others use */
     int32_t lvl = clamp(song.g[G_TXLVL], 0, 127), on, g0, g1, mv, depth, u, lfo, k0, k1, sc;
     tsvf_t fc;
     if (song.playing && !tx.play)
