@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* SLOOP boot splash: the logo (tools/gen_logo.py -> sloop_logo.h: 16 colours, RLE runs of
+/* The boot splash: the logo ((INFUR) tools/infur_splash.py -> infur_logo.h; SLOOP's was
+ * tools/gen_logo.py -> sloop_logo.h, same format: 16 colours, RLE runs of
  * (run - 1) << 4 | colour), drawn into the canvas in bands of at most 120 rows. */
 #ifndef UI_SMALL                 /* (2.7) compiled for size: not the audio path (gfx.c UI_SMALL); the host tests: nothing */
 #define UI_SMALL
@@ -11,12 +12,12 @@
 #if FELUCCA_LOGO_TEXT
 UI_SMALL static void sloop_logo_draw(uint32_t y0)
 {
-    static const char L[5] = {'S', 'L', 'O', 'O', 'P'};
-    uint32_t i, w = text_w(&FONT_L, "SLOOP"), k = w * 3u <= 232u ? 3u : 2u, h = 32u, off, y, x;
+    static const char L[5] = {'I', 'N', 'F', 'U', 'R'};
+    uint32_t i, w = text_w(&FONT_L, "INFUR"), k = w * 3u <= 232u ? 3u : 2u, h = 32u, off, y, x;
     int32_t px = 0;
     char c[2] = {0, 0};
     cv_begin(240, h * k, C_BLACK);
-    for (i = 0; i < 5u; i++) {                          /* small, at the top left: S white, L O O P the tracks' colours */
+    for (i = 0; i < 5u; i++) {                          /* small, at the top left: I white, N F U R the tracks' colours */
         c[0] = L[i];
         px = cv_text(px, 0, &FONT_L, c, i ? TE_COL_DEF[i - 1u] : C_WHITE);
     }
@@ -31,7 +32,7 @@ UI_SMALL static void sloop_logo_draw(uint32_t y0)
     cv_blit(0, y0 + 60u);
 }
 #else
-#include "sloop_logo.h"
+#include "infur_logo.h"
 UI_SMALL static void sloop_logo_draw(uint32_t y0)
 {
     uint32_t r0;
