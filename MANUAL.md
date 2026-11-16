@@ -257,15 +257,28 @@ for your work (`storage.c`, the map at the top of it):
 | --- | --- | --- |
 | **Sections** (A, B, C, D) | **4**, 3,816 B each | `0x97000..0x9EFFF` |
 | The one you are working on | autosaved, comes back at power-on | `0x9F000` and `0xFE000` |
-| **Song** (an arrangement) | **1**, up to **16 entries** — each a section and a number of bars, plus a loop flag | in the settings, 36 B |
+| **Song** (one arrangement) | **1**, up to **16 rows** — each row is *play section X for N bars*, N = 1–64, plus a loop flag | in the settings, 36 B |
 | **Your synth kits** SYN1–4 | **4** | in the settings |
 | **Your sample slots** USR1–4 | **4**, 80 KiB each (about 7 s at 22 kHz; USR3+4 join into one of ~15 s) | `0xA0000..0xDBFFF`, `0xE7000..` |
 | **Your sounds** (user presets) | **32**, in two banks of 16 | `0xDC000..0xDFFFF` |
 | **FM6 patches** B1–B27 | **27** | with the samples |
 
-**The thing to plan around: the device holds one song at a time.** A "song" is the four sections and
-one arrangement of them — not a library of beats. Four sections is a verse, a chorus, a bridge and an
-intro, and that is the ceiling until you move it off.
+**The song is one list, not sixteen of them.** Sixteen is how many *rows* that one arrangement has, and
+a row is "play this section for this many bars". Sections repeat freely, so a row 2 and a row 4 can both
+be B:
+
+```
+1. A x 4    intro        5. C x 8    chorus
+2. B x 8    verse        6. D x 4    bridge
+3. C x 8    chorus       7. C x 16   chorus out
+4. B x 8    verse            ... up to 16 rows, loop on or off
+```
+
+Length is never the problem: 16 rows of up to 64 bars is **1,024 bars**, about half an hour at 140 bpm.
+The ceilings that bite are **four distinct patterns** and **sixteen section changes**.
+
+**And the device holds one song at a time.** Four sections is an intro, a verse, a chorus and a bridge,
+and that is all of it until you move the song off.
 
 To keep more than that, use the web editor: it stores **songs as files on the computer**, as many as you
 like, with a playlist to load them back. So the workflow on the move is: make a song, back it up over
