@@ -112,6 +112,8 @@ enum {                          /* global parameters */
                                  * in quarter-dB steps, so -6.0 dB at 24 (fx.c CEIL_Q15). CLIP drives, CEIL sets where
                                  * the output lands: a mastering ceiling (-2.0 dB = 8) that the drive cannot push past.
                                  * A setting of the FM-1 (it belongs to the output, not to a song), kept with CLIP */
+    G_DIVE,                     /* (INFUR) GLO > MASTER 2: how far F#5 in the ROLL layer dives the selected
+                                 * track's pitch, 0..24 semitones (0 off). A setting of the FM-1 */
     G_CLIP,                     /* (INFUR) GLO > MASTER 2: the master soft clipper's drive, 0 off (fx.c clip_thr: it
                                  * lifts the limiter's threshold so the mix drives the output knee). In a project
                                  * (project.c: the spare bits of the byte TEXTURE's MOVE rides in) */
@@ -386,6 +388,15 @@ static uint32_t dly_samples(uint32_t d) { return dly_units(d) / (uint32_t)song.g
  * track's send to the reverb / the delay goes full, gliding in and out (~12 ms); ECHO THROW also takes the delay's FDBK
  * up to 70 % if it is lower. The song's values never change, nothing is saved or recorded. thr_req: bit 0 the reverb,
  * bit 1 the echo (the UI); thr_rev, thr_dly: the glide now, Q15 (fx.c mix_block, a block at a time) */
+/* (INFUR) the pitch dive: F#5 held in the ROLL layer bends the selected track down by G_DIVE semitones
+ * over ~120 ms and back when it is let go. On a synth track it rides the voices as a pitch bend does
+ * (voice.c); on the drum track it offsets each hit as it starts (drums.c), because a sweep inside a
+ * 40 ms hat is not audible but a roll whose hits walk downwards very much is. */
+#define DIVE_STEP 200                  /* the ramp a block: 32767 in about 120 ms */
+static volatile uint8_t dive_req;      /* the key is held */
+static volatile uint8_t dive_trk = 0xFFu;   /* the track it dives (the one selected when it went down) */
+static int32_t dive_g;                 /* the ramp now, Q15 (dive_semi16: drums.c, where clamp exists) */
+
 static volatile uint8_t thr_req;
 /* (2.7.1) MIDI CC 11, EXPRESSION, per track: 127 - its value (0, the default: full). A gain over the track's LEVEL (the
  * drums': GLO > DRUMS LVL), 40 log10(v / 127) dB as GM's: the mix is not touched. CC 121 and a project loaded reset it */

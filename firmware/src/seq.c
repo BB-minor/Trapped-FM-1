@@ -43,7 +43,7 @@ static const uint16_t SCALE_MASK[] = {
 #define KB_SILENT 255u
 static uint32_t kb_prev;
 /* per key: what its press started, so its release ends the same (whatever the layer or track is now) */
-enum { KS_NONE, KS_NOTE, KS_DRUM, KS_ROLL, KS_ERASE, KS_FX, KS_UI, KS_MOD, KS_RATE };
+enum { KS_NONE, KS_NOTE, KS_DRUM, KS_ROLL, KS_ERASE, KS_FX, KS_UI, KS_MOD, KS_RATE, KS_DIVE };
                       /* KS_MOD: a chord modifier (2.4); (INFUR) KS_RATE: a black key holding a roll rate */
 static uint8_t kb_kind[27], kb_trk[27], kb_n[27], kb_nt[27][4], kb_root[27];   /* kb_root: a chord key's note (CHORD+) */
 static int8_t kb_oct[27];                   /* the octave buttons when the key went down (arp_add: held_key, #191) */
@@ -2266,6 +2266,12 @@ static void key_down(uint32_t k)
             kb_kind[k] = KS_RATE;
             return;
         }
+        if (k == PUNCH_BLACK[PUNCH_NFX - 16u - 1u]) {   /* the eleventh, F#5: the pitch dive */
+            dive_trk = (uint8_t)sel;
+            dive_req = 1;
+            kb_kind[k] = KS_DIVE;
+            return;
+        }
         break;                                        /* a white key: the roll itself, further down */
     }
     case LY_ERASE:
@@ -2405,6 +2411,9 @@ static void key_up(uint32_t k)
             roll_key_rate = 0xFFu;
             roll_rate_key = 0xFFu;
         }
+        return;
+    case KS_DIVE:                                   /* (INFUR) F#5 up: the pitch comes back */
+        dive_req = 0;
         return;
     case KS_NOTE:
         mc = trk_midi_ch(kb_trk[k] % NTRK);

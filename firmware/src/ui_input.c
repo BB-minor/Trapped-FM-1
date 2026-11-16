@@ -484,7 +484,7 @@ UI_SMALL static void project_new(void)
     for (i = 0; i < G_COUNT; i++)
         if (i != G_SLOT && i != G_DRCH && i != G_SYNC && i != G_MIDI && i != G_ROUTE && (i < G_CH1 || i > G_CHOTH) &&
             i != G_BEND && i != G_FXCH && i != G_DRMAP && i != G_RMCH && i != G_CLKOUT && i != G_FXFADE &&
-            i != G_CEIL)                                 /* (INFUR) CEIL belongs to the output, not to a song */                                                                     /* (the
+            i != G_CEIL && i != G_DIVE)                  /* (INFUR) the output and the hands, not a song */                                                                     /* (the
                                                                  * FM-1's settings: GLO > MIDI 2.6) */
             song.g[i] = GP[i].def;
     song.solo = 0;

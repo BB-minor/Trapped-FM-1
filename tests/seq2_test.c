@@ -228,7 +228,8 @@ static void t_roll(void)
 {
     uint32_t i, k = 6, n;                           /* key 6 = B3 -> lane 3 (clap) */
     reset(120);
-    song.g[G_ROLL] = 2;                              /* 1/32 */
+    song.g[G_ROLL] = 7;                              /* 1/32 (INFUR: index 7 of the ten rates,
+                                                      * 1/2 1/4 4T 1/8 8T 1/16 16T 1/32 32T 1/64) */
     song.sel = TRK_DRUM;
     song.rec = 1u << TRK_DRUM;
     transport_req = 1;

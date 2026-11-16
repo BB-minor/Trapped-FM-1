@@ -1,5 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
+/* (INFUR) how far the pitch dive is down right now, in 1/16 semitone (core.h holds its state; this is
+ * the first file after dsp.c, so clamp exists here) */
+static int32_t dive_semi16(void)
+{
+    return (dive_g * clamp(song.g[G_DIVE], 0, 24) * 16) >> 15;
+}
 /* GM drum part (track 4): the SAMPLE engine's KIT set (General MIDI percussion map,
  * tools/gen_samples.py GM_KIT), played by its step pattern, the keys when track 4
  * is selected, and its own MIDI channel (GLO -> DRUMS, default 10). Its own voices
@@ -269,7 +275,10 @@ static void __attribute__((noinline)) drum_synth_on(uint32_t note, uint32_t vel,
     {
         uint32_t ln = lane_of_note(note);
         tweak = tweak && !DRUM_CLICK(note);
-        ds_on(&drums.ds[i], snd, crush, note, vel, tweak ? drum_tune[ln] * 16 : 0, tweak ? (uint32_t)(drum_dec[ln] + 4) : 4u);
+        int32_t tune16 = tweak ? drum_tune[ln] * 16 : 0;
+        if (dive_g && dive_trk == TRK_DRUM)          /* (INFUR) the ROLL layer's F#5: a roll walking down */
+            tune16 -= dive_semi16();
+        ds_on(&drums.ds[i], snd, crush, note, vel, tune16, tweak ? (uint32_t)(drum_dec[ln] + 4) : 4u);
     }
 }
 /* the editor's audition (editor_dsyn.c DSYN_PLAY): queued, played by the audio ISR (drum_audition_poll) */

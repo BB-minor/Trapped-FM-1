@@ -41,9 +41,9 @@
                                                 * so the format and its size do not change */
 _Static_assert(G_DRDLY == PROJ_NG && G_TXSRC == PROJ_NG + 5u,
                "the globals a project holds, then G_DRDLY (then 2.6's GLO > MIDI: settings of the FM-1)");
-_Static_assert(G_FXFADE == G_CLKOUT + 1u && G_CEIL == G_FXFADE + 1u && G_CLIP == G_CEIL + 1u &&
-               G_COUNT == G_CLIP + 1u,
-               "G_FXFADE (2.7.2), then G_CEIL (a setting of the FM-1) and G_CLIP (in a project: proj_tx_put)");
+_Static_assert(G_FXFADE == G_CLKOUT + 1u && G_CEIL == G_FXFADE + 1u && G_DIVE == G_CEIL + 1u &&
+               G_CLIP == G_DIVE + 1u && G_COUNT == G_CLIP + 1u,
+               "G_FXFADE (2.7.2), then G_CEIL and G_DIVE (settings of the FM-1) and G_CLIP (in a project)");
 #define PROJ_NC6 ((uint32_t)P_ITYPE)           /* format 6: the parameters kept in 16 bits, P_LEVEL .. P_VLEAD (as 5), */
 #define PROJ_NX6 ((uint32_t)(P_E0 - P_ITYPE))  /* the 2.6 ones in a byte (0..127), then P_E0 .. P_E7 */
 _Static_assert(PROJ_NC6 == PROJ_NP_V5 - 8u && PROJ_NX6 == 10u, "format 6: format 5's parameters, then ten bytes");
@@ -885,7 +885,8 @@ UI_SMALL static int project_used(uint32_t slot) { return proj_ok(&proj_slot[slot
  * then GLO > MIDI: CH1 CH2 CH3, the drum channel | OTHER << 7, GLO > MIDI 2's BEND, 3 spare. Written only while it is not
  * the default (nothing learned, channels 1 2 3 10, OTHER SEL, BEND 2): else the object is exactly 2.5's. 2.6 test
  * builds wrote 32 (the map) or 36 bytes (and the channels) */
-#define MIDI_PART (2u * ML_N + 8u)
+#define MIDI_PART_27 (2u * ML_N + 8u)        /* what 2.7.2 and before wrote */
+#define MIDI_PART (2u * ML_N + 10u)          /* (INFUR) + CEIL and DIVE, a byte each */
 _Static_assert(sizeof(persist_t) + sizeof(dsu_bank_t) + MIDI_PART <= ST_PAYLOAD_MAX, "the settings object fits its sector");
 static uint8_t midi_saved[MIDI_PART];
 static uint8_t drch_seed;                           /* a settings object as 2.5 wrote it: the drum channel was the
@@ -904,7 +905,9 @@ UI_SMALL static void midi_part_fill(uint8_t *b)
                                   (flt_reso > 10u ? 10u : flt_reso) << 2);   /* (2.7) GLO > MIDI 3: DR MAP, bit 1 CLK OUT
                                                                       * (a spare byte to 2.6); 2.7.2: FILTER RESO in bits
                                                                       * 2..5 (0 = none: the byte then reads as 2.7's) */
-    b[2u * ML_N + 7u] = midi_set[8];                /* (2.7) GLO > MIDI 3: REMOTE (the last spare byte) */
+    b[2u * ML_N + 7u] = midi_set[8];                /* (2.7) GLO > MIDI 3: REMOTE (2.7's last spare byte) */
+    b[2u * ML_N + 8u] = (uint8_t)(ceil_set > 24u ? 24u : ceil_set);   /* (INFUR) CEIL */
+    b[2u * ML_N + 9u] = (uint8_t)(dive_set > 24u ? 24u : dive_set);   /* (INFUR) DIVE */
 }
 UI_SMALL static int midi_part_default(const uint8_t *b)
 {
@@ -915,7 +918,8 @@ UI_SMALL static int midi_part_default(const uint8_t *b)
             return 0;
     return b[2u * ML_N] == def[0] && b[2u * ML_N + 1u] == def[1] && b[2u * ML_N + 2u] == def[2] &&
            b[2u * ML_N + 3u] == (uint8_t)(def[3] | def[4] << 7) && b[2u * ML_N + 4u] == def[5] && b[2u * ML_N + 5u] == def[6] &&
-           b[2u * ML_N + 6u] == (uint8_t)(def[7] | def[9] << 1) && b[2u * ML_N + 7u] == def[8];
+           b[2u * ML_N + 6u] == (uint8_t)(def[7] | def[9] << 1) && b[2u * ML_N + 7u] == def[8] &&
+           b[2u * ML_N + 8u] == 0u && b[2u * ML_N + 9u] == 12u;       /* (INFUR) CEIL off, DIVE an octave */
 }
 /* n: 32 (the map), 36 (and the channels) or MIDI_PART; every entry checked (a CC that learns, a parameter this knows, a
  * channel 0..16, a range 1..12) */
@@ -937,7 +941,7 @@ UI_SMALL static void midi_part_read(const uint8_t *b, uint32_t n)
         song.g[G_CH1] = midi_set[0], song.g[G_CH2] = midi_set[1], song.g[G_CH3] = midi_set[2];
         song.g[G_DRCH] = midi_set[3], song.g[G_CHOTH] = midi_set[4];
     }
-    if (n >= MIDI_PART) {
+    if (n >= MIDI_PART_27) {
         midi_set[5] = (uint8_t)((b[2u * ML_N + 4u] & 15u) >= 1u && (b[2u * ML_N + 4u] & 15u) <= 12u ? b[2u * ML_N + 4u] & 15u : 2u);
         song.g[G_BEND] = midi_set[5];
         fxfade = (uint8_t)((b[2u * ML_N + 4u] >> 4) & 15u);         /* (2.7.2) FX FADE (bits 4-7); older: 0 */
@@ -953,6 +957,12 @@ UI_SMALL static void midi_part_read(const uint8_t *b, uint32_t n)
         song.g[G_CLKOUT] = midi_set[9];
         midi_set[8] = (uint8_t)(b[2u * ML_N + 7u] <= 16u ? b[2u * ML_N + 7u] : 0u);   /* (2.7) REMOTE */
         song.g[G_RMCH] = midi_set[8];
+    }
+    if (n >= MIDI_PART) {                           /* (INFUR) an older object stops short: the defaults stand */
+        ceil_set = (uint8_t)(b[2u * ML_N + 8u] <= 24u ? b[2u * ML_N + 8u] : 0u);
+        dive_set = (uint8_t)(b[2u * ML_N + 9u] <= 24u ? b[2u * ML_N + 9u] : 12u);
+        song.g[G_CEIL] = ceil_set;
+        song.g[G_DIVE] = dive_set;
     }
     fm1_irq_on();
 }
@@ -1210,6 +1220,14 @@ UI_SMALL static void sections_flush(void)                        /* main loop */
                 midi_set[k] = (uint8_t)song.g[gid[k]];
                 settings_later = 1;
             }
+        if ((uint32_t)song.g[G_CEIL] != ceil_set) {   /* (INFUR) GLO > MASTER 2 > CEIL: the same */
+            ceil_set = (uint8_t)song.g[G_CEIL];
+            settings_later = 1;
+        }
+        if ((uint32_t)song.g[G_DIVE] != dive_set) {   /* (INFUR) GLO > MASTER 2 > DIVE: the same */
+            dive_set = (uint8_t)song.g[G_DIVE];
+            settings_later = 1;
+        }
         if ((uint32_t)song.g[G_FXFADE] != fxfade) {   /* (2.7.2) GLO > MASTER 2 > FADE: a setting of the FM-1 */
             fxfade = (uint8_t)song.g[G_FXFADE];
             settings_later = 1;

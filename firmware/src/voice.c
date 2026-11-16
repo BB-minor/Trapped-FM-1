@@ -796,6 +796,8 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
     t->bend_s = (int16_t)(t->bend_s + ((t->bend - t->bend_s) >> 2) + (t->bend > t->bend_s) - (t->bend < t->bend_s));
     bendq = ((int32_t)t->bend_s * clamp(song.g[G_BEND], 1, 12)) >> 1;   /* MIDI pitch bend (2.6): 1/4096 semitone,
                                                                          * gliding (a quarter of the way a block) */
+    if (dive_g && dive_trk < NTRK && t == &trk[dive_trk])   /* (INFUR) the ROLL layer's F#5, on this track */
+        bendq -= dive_semi16() << 8;                /* 1/16 semitone -> 1/4096 */
     if (e->block)                                       /* the engine's per-part work (DRAWBAR: bars, rotor) */
         e->block(t);
     for (i = 0; i < NVOICE; i++) {
