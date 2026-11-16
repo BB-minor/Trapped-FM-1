@@ -40,7 +40,8 @@ static const char *const DRUM_KIT_STYLES[] = {"STUDIO", "SOFT", "PUNCHY", "BRIGH
                                               "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH"};
 _Static_assert(sizeof(DRUM_KIT_NAMES) / sizeof(DRUM_KIT_NAMES[0]) == DRUM_KITS, "a name per kit");
 static uint32_t drum_kit(void) { return (uint32_t)clamp(TDRUM->p[P_E0], 0, DRUM_KITS - 1); }
-#define DRUM_DEFAULT_KIT DRUM_SAMPLED   /* power-on: 808 */
+#define DRUM_DEFAULT_KIT (DRUM_SAMPLED + 6u)   /* (INFUR) power-on: the INFUR kit (was the 808 at
+                                               * DRUM_SAMPLED; both are synthesised, neither sampled) */
 
 static struct {
     voice_t v[NDRUM];

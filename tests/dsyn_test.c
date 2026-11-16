@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
+#include <stdio.h>
 /* SLOOP 2.5: the drum track's SYN1..SYN4, your own synthesised kits (drum_synth.c dsu), and the editor's DRUM
  * SYNTH commands (editor_dsyn.c, protocol v10), through hostsim.c:
- *   the kits list ends with SYN1..SYN4; never stored they are copies of 808, 909, TRAP, TECHNO
+ *   the kits list ends with SYN1..SYN4; never stored they are copies of the four DSU_DEF names
  *   SYN1 (a copy of 808) plays every lane bit for bit as the 808 kit; an edit is heard at once, undone it is the same
  *   any byte the editor (or a file, or flash) sends is put into range: 2000 random kits play bounded and finite
  *   DSYN_LIST / GET / PUT (a sound, the name, a factory copy) / PLAY (queued, played by the audio block) / STORE
@@ -134,17 +135,25 @@ int main(void)
     for (k = 0; k < DSU_N; k++)
         ok &= !memcmp(dsu.k[k].s, DS_KITS[DSU_DEF[k]].s, sizeof dsu.k[k].s) && dsu.k[k].crush == DS_KITS[DSU_DEF[k]].crush &&
               !strncmp(dsu.k[k].name, DS_KITS[DSU_DEF[k]].name, 8) && dsu.k[k].src == DSU_DEF[k];
-    check(ok && !strcmp(DS_KITS[DSU_DEF[0]].name, "808") && !strcmp(DS_KITS[DSU_DEF[3]].name, "TECHNO"),
-          "never stored: SYN1..4 = 808, 909, TRAP, TECHNO");
+    {   /* (INFUR) follow DSU_DEF rather than name the four: they are indices into DS_KITS and a kit
+         * added to the middle of that list shifts them, which is how this test last broke */
+        char lbl[64];
+        int n = 0;
+        for (k = 0; k < DSU_N; k++)
+            n += snprintf(lbl + n, sizeof lbl - (size_t)n, k ? ", %.8s" : "never stored: SYN1..4 = %.8s",
+                          DS_KITS[DSU_DEF[k]].name);
+        check(ok, lbl);
+    }
     {
         uint32_t d[DS_LANES], act = 0;
-        check(lanes_same(DS_KITS[0].s, DS_KITS[0].crush, dsu.k[0].s, dsu.k[0].crush, 0),
-              "SYN1 (808) plays the 16 sounds bit for bit as the 808 kit");
+        check(lanes_same(DS_KITS[DSU_DEF[0]].s, DS_KITS[DSU_DEF[0]].crush, dsu.k[0].s, dsu.k[0].crush, 0),
+              "SYN1 plays the 16 sounds bit for bit as the kit it came from");
         dsu.k[0].s[0].decay = (uint8_t)(dsu.k[0].s[0].decay - 30u);
-        lanes_same(DS_KITS[0].s, DS_KITS[0].crush, dsu.k[0].s, dsu.k[0].crush, d);
+        lanes_same(DS_KITS[DSU_DEF[0]].s, DS_KITS[DSU_DEF[0]].crush, dsu.k[0].s, dsu.k[0].crush, d);
         check(d[0] > 1000u && d[DS_LANES - 1u] == d[0], "an edit (the kick's decay) is heard on that sound only");
         dsu.k[0].s[0].decay = (uint8_t)(dsu.k[0].s[0].decay + 30u);
-        check(lanes_same(DS_KITS[0].s, DS_KITS[0].crush, dsu.k[0].s, dsu.k[0].crush, 0), "... undone: bit for bit again");
+        check(lanes_same(DS_KITS[DSU_DEF[0]].s, DS_KITS[DSU_DEF[0]].crush, dsu.k[0].s, dsu.k[0].crush, 0),
+              "... undone: bit for bit again");
         for (i = 0; i < NDRUM; i++)
             drums.v[i].active = 0;
         TDRUM->p[P_E0] = (int16_t)(DRUM_SYN + 2u);
@@ -169,8 +178,10 @@ int main(void)
         ed_dsyn_handle(ED_DSYN_GET, &a, 1);
         p = 2u + (uint32_t)strlen((char *)ed_out + 2) + 1u;
         k = ed_unpack7(ed_out + p, ed_n - p, got, sizeof got);
-        check(ed_out[0] == a && ed_out[1] == 0 && !strcmp((char *)ed_out + 2, "909") && k == sizeof got - 0u &&
-              got[0] == DS_KITS[1].crush && got[1] == 1 && !memcmp(got + 2, DS_KITS[1].s, sizeof DS_KITS[1].s),
+        check(ed_out[0] == a && ed_out[1] == 0 &&                      /* (INFUR) SYN2 is DSU_DEF[1], named */
+              !strncmp((char *)ed_out + 2, DS_KITS[DSU_DEF[1]].name, 8) && k == sizeof got - 0u &&
+              got[0] == DS_KITS[DSU_DEF[1]].crush && got[1] == DSU_DEF[1] &&
+              !memcmp(got + 2, DS_KITS[DSU_DEF[1]].s, sizeof DS_KITS[DSU_DEF[1]].s),
               "DSYN_GET SYN2: name, crush, the kit it came from, its 16 sounds");
         a = 99;
         ed_n = 0;

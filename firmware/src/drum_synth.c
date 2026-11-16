@@ -348,7 +348,11 @@ typedef struct {
 _Static_assert(sizeof(dsnd_t) == 22u && sizeof(dsu_kit_t) == 364u && sizeof(dsu_bank_t) == 1464u, "drum synth bank layout");
 static dsu_bank_t dsu;
 static volatile uint8_t dsu_dirty;                /* RAM differs from flash (an edit not stored yet) */
-static const uint8_t DSU_DEF[DSU_N] = {0, 1, 5, 12};   /* 808, 909, TRAP, TECHNO */
+static const uint8_t DSU_DEF[DSU_N] = {6, 0, 5, 7};    /* (INFUR) INFUR, 808, TRAP, DRILL: the four a
+                                                        * user kit starts from here. It was {0, 1, 5, 12}
+                                                        * for 808, 909, TRAP, TECHNO, and inserting INFUR
+                                                        * at 6 made 12 D.HOUSE without the comment moving:
+                                                        * these are indices into DS_KITS and they shift. */
 
 static void dsu_from_factory(uint32_t k, uint32_t src)
 {
