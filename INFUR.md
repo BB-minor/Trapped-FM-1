@@ -1,5 +1,8 @@
 # INFUR — a trap groovebox on the FM-1
 
+**Playing it: [MANUAL.md](MANUAL.md).** This file is the engineering side — what was decided, what it
+cost, and why.
+
 Work in progress on top of SLOOP 2.8.5 (with the `dualcore` and `ram` branches merged).
 Nothing here has run on hardware yet: the device has not arrived. Everything is built and
 verified on the host and in the browser preview until it does.
