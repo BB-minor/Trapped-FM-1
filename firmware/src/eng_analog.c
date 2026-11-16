@@ -156,6 +156,21 @@ static const preset_t ANALOG_PRESETS[] = {
      XP(P_LD_PIT + 1, 1, P_LRATE + 1, 80, P_LFADE + 1, 60, P_GLIDE + 1, 30)},
     {"SAW BASS", {0, 6, 64, 0, 52, 30, 40, 64}, {0, 60, 60, 20}, 30, 1, FX(8, 0, 0, 4), XP(P_TRANS + 1, -24)},
     {"SINE PAD", {3, 10, 64, 4, 90, 0, 0, 32}, {80, 90, 118, 90}, 0, 0, FX(0, 60, 20, 65)},
+    /* (INFUR) four 808s voiced against this firmware's own kick, which sits at 62 Hz and decays in
+     * 210 ms where a stock trap kick is 52 Hz and 520. That kick carries the punch and leaves the sub
+     * alone, so these are longer than the 808s above (the space under a short kick is theirs to fill)
+     * and drop less in pitch (ED_PIT 8..20 against 12..24: the kick already bends 20 semitones of its
+     * own, and two drops on the same beat read as a smear). TRANS -24 as all of them, so a note played
+     * at C3 sounds at C1. Appended, not slotted in beside the other 808s: a preset's index is what a
+     * project stores and what preset_trim.h is keyed by. */
+    {"INFUR 808", {3, 0, 0, 0, 127, 0, 62, 0}, {0, 120, 0, 58}, 0, 1, FX(18, 0, 0, 0),
+     XP(P_GLIDE + 1, 60, P_GLMODE + 1, 1, P_ED_PIT + 1, 14, P_TRANS + 1, -24)},
+    {"INFUR SUB", {3, 0, 0, 0, 96, 0, 8, 0}, {0, 118, 0, 44}, 0, 1, FX(0, 0, 0, 0),
+     XP(P_GLIDE + 1, 42, P_TRANS + 1, -24)},
+    {"INFUR GLD", {3, 0, 0, 0, 127, 0, 66, 0}, {0, 126, 0, 66}, 0, 1, FX(22, 0, 0, 0),
+     XP(P_GLIDE + 1, 92, P_GLMODE + 1, 1, P_ED_PIT + 1, 8, P_TRANS + 1, -24)},
+    {"INFUR HRD", {3, 0, 0, 0, 88, 20, 124, 28}, {0, 114, 0, 50}, 0, 1, FX(38, 0, 0, 0),
+     XP(P_GLIDE + 1, 56, P_GLMODE + 1, 1, P_ED_PIT + 1, 20, P_TRANS + 1, -24)},
 };
 
 /* (after Clipper 1.2) UNISON (voice.c unison_spread): both oscillators moved by r (Q32) of a turn of the note,
