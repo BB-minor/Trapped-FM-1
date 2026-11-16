@@ -248,7 +248,31 @@ is still visible on the ground.
 
 ---
 
-## 10. Limits worth knowing
+## 10. What the device holds
+
+The FM-1 has a 1 MB flash. After the firmware, the sample sets and the settings, this is what is left
+for your work (`storage.c`, the map at the top of it):
+
+| | How many | Where |
+| --- | --- | --- |
+| **Sections** (A, B, C, D) | **4**, 3,816 B each | `0x97000..0x9EFFF` |
+| The one you are working on | autosaved, comes back at power-on | `0x9F000` and `0xFE000` |
+| **Song** (an arrangement) | **1**, up to **16 entries** — each a section and a number of bars, plus a loop flag | in the settings, 36 B |
+| **Your synth kits** SYN1–4 | **4** | in the settings |
+| **Your sample slots** USR1–4 | **4**, 80 KiB each (about 7 s at 22 kHz; USR3+4 join into one of ~15 s) | `0xA0000..0xDBFFF`, `0xE7000..` |
+| **Your sounds** (user presets) | **32**, in two banks of 16 | `0xDC000..0xDFFFF` |
+| **FM6 patches** B1–B27 | **27** | with the samples |
+
+**The thing to plan around: the device holds one song at a time.** A "song" is the four sections and
+one arrangement of them — not a library of beats. Four sections is a verse, a chorus, a bridge and an
+intro, and that is the ceiling until you move it off.
+
+To keep more than that, use the web editor: it stores **songs as files on the computer**, as many as you
+like, with a playlist to load them back. So the workflow on the move is: make a song, back it up over
+USB, start the next one. The autosave means nothing is lost by switching off, but starting a new song
+does overwrite the sections of the last one if you have not exported it.
+
+## 11. Limits worth knowing
 
 - **Four notes a step.** A 9th chord fits exactly; nothing larger.
 - **Nudge, swing and fill are per step on the drum track**, not per lane: the whole step moves, all
@@ -262,7 +286,7 @@ is still visible on the ground.
 
 ---
 
-## 11. Before the first flash
+## 12. Before the first flash
 
 **Not yet done — read this before installing anything.**
 
