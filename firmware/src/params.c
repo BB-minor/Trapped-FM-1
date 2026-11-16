@@ -63,6 +63,7 @@ static const char *const N_GO[] = {"--", "GO"};
 static const char *const N_SLCR[] = {"OFF", "GATE", "STUT"};             /* SL_OFF .. SL_STUT (slicer.c) */
 static const char *const N_SLDIV[] = {"1/8", "1/16", "1/32", "8T", "16T", "32T"};   /* SL_DEN */
 static const char *const N_CHORD[] = {"OFF", "TRIAD", "7TH", "9TH", "SUS4", "POWER"};   /* seq.c CHORD_DEG */
+static const char *const N_RSHAPE[] = {"FLAT", "UP", "DOWN", "UPDN"};   /* (INFUR) seq.c rshape */
 static const char *const N_ROLL[] = {"1/2", "1/4", "4T", "1/8", "8T", "1/16", "16T", "1/32", "32T", "1/64"};
                                               /* (INFUR) slow to fast; seq.c ROLL_HITS / ROLL_BEATS */
 static const char *const N_ENGNAME[] = {"ANALOG", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN",
@@ -208,7 +209,8 @@ static const param_desc_t GP[G_COUNT] = {
     [G_FXFADE] = PD("FADE", F_INT, 0, 15, 0),
     [G_CLIP] = PD("CLIP", F_PCT, 0, 127, 0),     /* (INFUR) GLO > MASTER 2: the master soft clipper (fx.c) */
     [G_CEIL] = PD("CEIL", F_INT, 0, 24, 0),      /* (INFUR) .. its output ceiling, quarter-dB steps (0 = off) */
-    [G_DIVE] = PD("DIVE", F_INT, 0, 24, 12),     /* (INFUR) F#5 in the ROLL layer: the dive, semitones */     /* 2.7.2: the punch-in FX fade (FX layer SELECT), 0 off .. 15 (punch.c) */
+    [G_DIVE] = PD("DIVE", F_INT, 0, 24, 12),     /* (INFUR) F#5 in the ROLL layer: the dive, semitones */
+    [G_RSHAPE] = PE("ROLL~", N_RSHAPE, 0),       /* (INFUR) how a ratchet's hits are shaped (seq.c) */     /* 2.7.2: the punch-in FX fade (FX layer SELECT), 0 off .. 15 (punch.c) */
 };
 
 static const param_desc_t DRUM_KIT_DESC = PE("KIT", DRUM_KIT_NAMES, 0);
@@ -422,7 +424,9 @@ static const page_t PAGES[] = {
     {"VOICE 2", FAM_EDIT, SC_TRACK, GR_NONE, {P_ALLOC, P_DETUNE, P_PAN, P_MUTE}},
     {"GLOBAL", FAM_GLO, SC_GLOBAL, GR_NONE, {G_BPM, G_SWING, G_CLOCK, G_TUNE}},
     {"MASTER", FAM_GLO, SC_GLOBAL, GR_NONE, {G_DUST, G_DUCK, G_FILT, G_ROLL}},
-    {"MASTER 2", FAM_GLO, SC_GLOBAL, GR_NONE, {G_CLIP, G_CEIL, G_DIVE, G_FXFADE}},   /* (INFUR) the master soft
+    {"MASTER 2", FAM_GLO, SC_GLOBAL, GR_NONE, {G_CLIP, G_CEIL, G_DIVE, G_RSHAPE}},   /* (INFUR) FX FADE
+                                                     * went back to being the FX layer's SELECT alone: the
+                                                     * roll shape wants the slot more */   /* (INFUR) the master soft
                                                      * clipper, and the punch-in fade the comments always said
                                                      * lived here (it was only on the FX layer's SELECT) */
     {"SYSTEM", FAM_GLO, SC_GLOBAL, GR_NONE, {G_MIDI, G_SYNC, G_ROUTE, G_INFO}},

@@ -112,6 +112,8 @@ enum {                          /* global parameters */
                                  * in quarter-dB steps, so -6.0 dB at 24 (fx.c CEIL_Q15). CLIP drives, CEIL sets where
                                  * the output lands: a mastering ceiling (-2.0 dB = 8) that the drive cannot push past.
                                  * A setting of the FM-1 (it belongs to the output, not to a song), kept with CLIP */
+    G_RSHAPE,                   /* (INFUR) GLO > MASTER 2: the shape of a ratchet's hits, FLAT / UP / DOWN /
+                                 * UPDN (seq.c rshape). A setting of the FM-1 */
     G_DIVE,                     /* (INFUR) GLO > MASTER 2: how far F#5 in the ROLL layer dives the selected
                                  * track's pitch, 0..24 semitones (0 off). A setting of the FM-1 */
     G_CLIP,                     /* (INFUR) GLO > MASTER 2: the master soft clipper's drive, 0 off (fx.c clip_thr: it

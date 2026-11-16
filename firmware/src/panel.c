@@ -90,6 +90,7 @@ static uint8_t midi_set[10] = MIDI_SET_DEF;
 static uint8_t fxfade;                          /* (2.7.2) FX layer SELECT (FX held): the punch-in FX fade, 0..15 (punch.c);
                                                  * a setting of the FM-1, mirrored in song.g[G_FXFADE], kept in BEND's byte */
 static uint8_t ceil_set;                        /* (INFUR) GLO > MASTER 2 > CEIL, 0..24 (fx.c out_ceil) */
+static uint8_t rshape_set;                      /* (INFUR) GLO > MASTER 2 > ROLL~, 0..3 (seq.c rshape) */
 static uint8_t dive_set = 12;                   /* (INFUR) GLO > MASTER 2 > DIVE, 0..24 (core.h dive_semi16).
                                                  * Both belong to the output and the hands, not to a song, so they
                                                  * live in the settings object, in two bytes of their own */

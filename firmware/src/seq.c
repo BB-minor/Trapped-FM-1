@@ -2712,6 +2712,36 @@ static uint32_t step_vel(const step_t *s, uint32_t i)
     return lvl_vel((s->lvl >> (2u * i)) & 3u, base);
 }
 
+/* (INFUR) ROLL SHAPE (GLO > MASTER 2): hit h of hits in a ratchet, as a Q15 gain on the step's velocity.
+ * FLAT leaves every hit alone. The first hit of a ratchet is played by the step itself and the rest by
+ * seq_ratchets, so both call this: without the first one UP could not start quiet, which is the whole
+ * point of a crescendo roll. A hit never falls below RSHAPE_MIN, so a shaped roll thins out, not away. */
+#define RSHAPE_MIN 11469                            /* 35 % */
+static int32_t rshape(uint32_t h, uint32_t hits)
+{
+    int32_t sh = clamp(song.g[G_RSHAPE], 0, 3), x;
+    if (!sh || hits < 2u || h >= hits)
+        return 32767;
+    x = (int32_t)((h * 32767u) / (hits - 1u));      /* 0 at the first hit .. 32767 at the last */
+    if (sh == 2)
+        x = 32767 - x;                              /* DOWN */
+    else if (sh == 3)
+        x = x < 16384 ? x * 2 : (32767 - x) * 2;    /* UPDN */
+    return RSHAPE_MIN + (int32_t)(((int64_t)x * (32767 - RSHAPE_MIN)) >> 15);
+}
+static uint32_t rshape_vel(uint32_t vel, uint32_t h, uint32_t hits)
+{
+    if (!song.g[G_RSHAPE] || hits < 2u)
+        return vel;                                 /* FLAT: not a velocity touched. (mulq15 by 32767 is
+                                                     * x0.99997, not identity: it turned 100 into 99 and
+                                                     * every golden render with it) */
+    return (uint32_t)clamp(mulq15((int32_t)vel, rshape(h, hits)), 1, 127);
+}
+static uint32_t step_vel0(const step_t *s, uint32_t i)   /* a synth note's first hit, shaped */
+{
+    return rshape_vel(step_vel(s, i), 0, 1u + ((s->rat >> (2u * i)) & 3u));
+}
+
 /* play one synth step: TIE extends, REST releases, NOTE (re)triggers; a SLIDE on the previous
  * step makes this one legato with a glide (acid style). skip: bit k = note k already sounds
  * from live recording (not triggered, not released here). len: the step's length (units). */
@@ -2755,8 +2785,9 @@ static void seq_step(track_t *t, const step_t *s, uint32_t slen, uint32_t skip)
                 skip |= 1u << i;
         for (i = 0; i < s->n; i++)
             if (!((kept >> i) & 1u) && !((skip >> i) & 1u) && !roll_has(t, s->note[i])) {
-                trk_note_on(t, s->note[i], step_vel(s, i));   /* (a note going on that was not playing: from here) */
-                seq_out_on(t, s->note[i], step_vel(s, i));
+                uint32_t v0 = step_vel0(s, i);      /* (INFUR) hit 0 of its ratchet, shaped */
+                trk_note_on(t, s->note[i], v0);     /* (a note going on that was not playing: from here) */
+                seq_out_on(t, s->note[i], v0);
             }
         t->seq_n = 0;
         for (i = 0; i < s->n; i++)
@@ -2782,12 +2813,13 @@ static void seq_step(track_t *t, const step_t *s, uint32_t slen, uint32_t skip)
             skip |= 1u << i;                        /* (a roll plays it) */
     for (i = 0; i < s->n; i++)
         if (!((skip >> i) & 1u)) {
+            uint32_t v0 = step_vel0(s, i);          /* (INFUR) hit 0 of its ratchet, shaped */
             if (slide_in)
-                trk_note_on(t, s->note[i], step_vel(s, i));
+                trk_note_on(t, s->note[i], v0);
             else                                    /* (STRUM: a chord's notes one after the other) */
-                trk_note_chord(t, s->note, s->n, i, step_vel(s, i));
+                trk_note_chord(t, s->note, s->n, i, v0);
             if (!slide_in || !(mo_set[trk_index(t) % NTRK][s->note[i] >> 5] & (1u << (s->note[i] & 31u))))
-                seq_out_on(t, s->note[i], step_vel(s, i));   /* (a slide into the same note: one MIDI note) */
+                seq_out_on(t, s->note[i], v0);      /* (a slide into the same note: one MIDI note) */
         }
     if (slide_in)                                   /* release what is not held over */
         for (i = 0; i < t->seq_n; i++) {
@@ -2814,8 +2846,9 @@ static void drum_step(track_t *t, const dstep_t *s, uint32_t skip)
     seq_out_track_off(t);                           /* the last step's hits end here */
     for (l = 0; m; l++, m >>= 1)
         if (m & 1u) {
-            trk_note_on(t, LANE_NOTE[l], lvl_vel(dstep_lvl(s, l), 100));
-            seq_out_on(t, LANE_NOTE[l], lvl_vel(dstep_lvl(s, l), 100));
+            uint32_t v = rshape_vel(lvl_vel(dstep_lvl(s, l), 100), 0, 1u + dstep_rat(s, l));
+            trk_note_on(t, LANE_NOTE[l], v);        /* (INFUR) hit 0 of its ratchet: shaped too */
+            seq_out_on(t, LANE_NOTE[l], v);
         }
 }
 
@@ -2835,9 +2868,10 @@ static void seq_ratchets(track_t *t, uint32_t into, uint32_t slen)
             h = into * hits / slen;
             done = (t->rat_lanes >> (2u * i)) & 3u;
             if (h > done && h < hits) {
+                uint32_t v = rshape_vel(lvl_vel(dstep_lvl(s, i), 100), h, hits);
                 t->rat_lanes = (t->rat_lanes & ~(3u << (2u * i))) | h << (2u * i);
-                trk_note_on(t, LANE_NOTE[i], lvl_vel(dstep_lvl(s, i), 100));
-                seq_out_on(t, LANE_NOTE[i], lvl_vel(dstep_lvl(s, i), 100));
+                trk_note_on(t, LANE_NOTE[i], v);
+                seq_out_on(t, LANE_NOTE[i], v);
             }
         }
         return;
@@ -2853,10 +2887,11 @@ static void seq_ratchets(track_t *t, uint32_t into, uint32_t slen)
             h = into * hits / slen;
             if (h > t->rat_done[i] && h < hits) {
                 uint32_t j;
+                uint32_t v = rshape_vel(step_vel(s, i), h, hits);
                 t->rat_done[i] = (uint8_t)h;
                 trk_note_off(t, s->note[i]);
-                trk_note_on(t, s->note[i], step_vel(s, i));
-                seq_out_on(t, s->note[i], step_vel(s, i));
+                trk_note_on(t, s->note[i], v);
+                seq_out_on(t, s->note[i], v);
                 t->seq_off = slen / hits * (uint32_t)t->p[P_SGATE] / 128u;
                 for (j = 0; j < t->seq_n && t->seq_notes[j] != s->note[i]; j++)
                     ;
