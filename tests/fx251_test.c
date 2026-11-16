@@ -350,7 +350,9 @@ static void t_texture(void)
     tx_set(1, 0, 0, 0, 2, 1, 0);                        /* VINYL at LEVEL 0: nothing either */
     render(300);
     check(!memcmp(shared_dry, out_l, 300u * CTL * 4u) && !tx.g, "TEXTURE OFF (or LEVEL 0): the mix bit for bit as without");
-    for (s = 1; s <= 6u; s++) {                         /* each source alone, ALWAYS (stopped), LEVEL 64, no MOVE */
+    for (s = 1; s < TX_USR1; s++) {                     /* each built-in source alone, ALWAYS (stopped), LEVEL 64,
+                                                         * no MOVE. (INFUR) up to TX_USR1, not a fixed six: the
+                                                         * USR slots are silent without a sample loaded */
         setup();
         tx_set((int32_t)s, 64, 0, 0, 2, 1, 0);
         render(NB);
@@ -361,7 +363,7 @@ static void t_texture(void)
         printf("  TEXTURE %-6s: rms %.0f (%.1f dBFS), mean %.0f, peak %d\n", N_TXSRC[s], r, 20 * log10(r / 32768), m, pk);
         ok &= r > 250 && r < 2500 && fabs(m) < 0.2 * r + 30 && pk < 30000;
     }
-    check(ok, "TEXTURE: VINYL TAPE RAIN WIND RADIO ROOM heard (LEVEL 64: -40 .. -22 dBFS rms), bounded, no offset");
+    check(ok, "TEXTURE: every built-in source heard (LEVEL 64: -40 .. -22 dBFS rms), bounded, no offset");
     setup();
     fork_dry(200);                                      /* (the same start, TEXTURE off) */
     tx_set(2, 127, 0, 0, 2, 0, 0);                      /* TAPE, WHEN PLAY, stopped: nothing; ALWAYS: heard */

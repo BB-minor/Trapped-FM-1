@@ -421,7 +421,7 @@ int main(int argc, char **argv)
     /* ---- ARP layer: a roll, rate knob */
     press(B_ARP); frames(10);
     encs[panel.enc[EN_K1]] = 1; frame();
-    check(song.g[G_ROLL] == 2, "ARP + KNOB 1: the roll rate (1/32)");
+    check(song.g[G_ROLL] == 6, "ARP + KNOB 1: the roll rate (one up from 1/16 is 16T of the ten)");
     fm1_in.notes = 1u << 7; frames(3); check(roll[0].on, "ARP + a key: it rolls");
     ppm("layer-roll");
     fm1_in.notes = 0; frame(); check(!roll[0].on, "key up: the roll ends");
@@ -922,10 +922,10 @@ int main(int argc, char **argv)
             open_family(FAM_SEQ); frame();            /* (round to STEP again: SEQ opens there, as before) */
             go_home(); frame();
             open_family(FAM_GLO); frame();
-            (void)page_pos(&n);                       /* GLO: its nine pages */
+            (void)page_pos(&n);                       /* GLO: its ten pages (INFUR: + MASTER 2) */
             go_home(); frame();
             ui.menu = (uint8_t)menu0, ui.menu_sel = (uint8_t)sel0, ui.force = 1; frame();
-            ok &= k1 == 1u && n1 == 2u && k2 == 2u && n2 == 2u && k3 == 3u && n3 == 3u && n == 9u;
+            ok &= k1 == 1u && n1 == 2u && k2 == 2u && n2 == 2u && k3 == 3u && n3 == 3u && n == 10u;
             if (!ok)
                 printf("ui:   counter: STEP %u/%u PATTERN %u/%u SONG %u/%u GLO /%u\n", k1, n1, k2, n2, k3, n3, n);
             check(ok, "page counter (2.7): as SELECT walks them: STEP 1/2, PATTERN 2/2 (SONG, its own screen, not counted)");
