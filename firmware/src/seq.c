@@ -43,7 +43,8 @@ static const uint16_t SCALE_MASK[] = {
 #define KB_SILENT 255u
 static uint32_t kb_prev;
 /* per key: what its press started, so its release ends the same (whatever the layer or track is now) */
-enum { KS_NONE, KS_NOTE, KS_DRUM, KS_ROLL, KS_ERASE, KS_FX, KS_UI, KS_MOD };   /* KS_MOD: a chord modifier (2.4) */
+enum { KS_NONE, KS_NOTE, KS_DRUM, KS_ROLL, KS_ERASE, KS_FX, KS_UI, KS_MOD, KS_RATE };
+                      /* KS_MOD: a chord modifier (2.4); (INFUR) KS_RATE: a black key holding a roll rate */
 static uint8_t kb_kind[27], kb_trk[27], kb_n[27], kb_nt[27][4], kb_root[27];   /* kb_root: a chord key's note (CHORD+) */
 static int8_t kb_oct[27];                   /* the octave buttons when the key went down (arp_add: held_key, #191) */
 static uint8_t last_note = 60;
@@ -1979,10 +1980,16 @@ static void drum_input(uint32_t lane, uint32_t lvl, uint32_t rat, int rec)
 }
 
 /* -------------------------------------------------------------- roll --- */
-/* ARP + key: note repeat. The key plays at G_ROLL (1/8, 1/16, 1/32, 32T, 1/64) on the transport's grid
- * (stopped: from the press) until it or ARP is up. Recorded, a roll faster than the track's steps
- * becomes ratchets (1/32 on 1/16 steps: x2, 32T: x3, 1/64: x4). */
-static const uint8_t ROLL_DEN[5] = {2, 4, 8, 12, 16};
+/* ARP + key: note repeat. The key plays at G_ROLL on the transport's grid (stopped: from the press)
+ * until it or ARP is up. Recorded, a roll faster than the track's steps becomes ratchets (1/32 on 1/16
+ * steps: x2, 32T: x3, 1/64: x4) -- only when the roll is a whole multiple of the step: a 16T roll on a
+ * 1/16 grid is 1.5 steps and records as one plain hit, not a wrong ratchet.
+ * (INFUR) Ten rates, slow to fast, each as hits per so many beats: 1/2 and 4T do not divide a beat a
+ * whole number of times, which is why the rate is a pair and not one denominator as it was. Every one
+ * of them divides BEAT_U exactly, so none of them drifts. */
+static const uint8_t ROLL_HITS[10] = {1, 1, 3, 2, 3, 4, 6, 8, 12, 16};
+static const uint8_t ROLL_BEATS[10] = {2, 1, 2, 1, 1, 1, 1, 1, 1, 1};
+#define NROLL_RATE 10u
 #define NROLL 4u
 static struct {
     uint8_t on, key, trk, note, lvl;    /* note: the synth note, or the lane */
@@ -1990,7 +1997,40 @@ static struct {
     uint32_t off;                       /* synth: units to its note-off, 0 = not sounding */
     uint32_t rec_abs;                   /* the step its last recorded hit went into */
 } roll[NROLL];
-static uint32_t roll_den(void) { return ROLL_DEN[(uint32_t)clamp(song.g[G_ROLL], 0, 4)]; }
+/* (INFUR) the rate now: a black key held in the ROLL layer picks one, else GLO > MASTER > ROLL */
+static uint8_t roll_key_rate = 0xFFu;            /* 0..9 while a black key is held, else none */
+static uint8_t roll_rate_key = 0xFFu;            /* which key set it (the last one pressed wins) */
+/* (INFUR) the black keys of the ROLL layer, F#3 up, one a rate: slow on the left, fast on the right.
+ * They are free to take: on the drum track lane_of_key gives a black key the lane of the white key to
+ * its left, so a black key only ever doubled its neighbour. -1: a white key, or the eleventh (F#5). */
+static int32_t roll_black(uint32_t k)
+{
+    uint32_t i;
+    for (i = 0; i < NROLL_RATE && i < PUNCH_NFX - 16u; i++)
+        if (PUNCH_BLACK[i] == k)
+            return (int32_t)i;
+    return -1;
+}
+static uint32_t roll_rate(void)
+{
+    return roll_key_rate < NROLL_RATE ? roll_key_rate
+                                      : (uint32_t)clamp(song.g[G_ROLL], 0, (int32_t)NROLL_RATE - 1);
+}
+static uint32_t roll_u(void)                     /* one hit's length in clock units */
+{
+    uint32_t i = roll_rate();
+    return BEAT_U * ROLL_BEATS[i] / ROLL_HITS[i];
+}
+/* the roll's grid: as grid_den, but for a rate of ROLL_HITS hits every ROLL_BEATS beats. Counted inside
+ * the group of beats so that clk_beat * BEAT_U, which overflows 32 bits after a quarter of an hour, is
+ * never formed. With ROLL_BEATS 1 it is grid_den exactly. */
+static uint32_t grid_roll(uint32_t sw, uint32_t *into, uint32_t *len)
+{
+    uint32_t i = roll_rate(), hits = ROLL_HITS[i], beats = ROLL_BEATS[i];
+    uint32_t u = BEAT_U * beats / hits;
+    uint32_t loc = (clk_beat % beats) * BEAT_U + clk_pos;
+    return grid_swing((clk_beat / beats) * hits + loc / u, loc % u, u, sw, into, len);
+}
 /* the lanes / notes a roll plays live on track t: the pattern does not play them meanwhile (no flam
  * with what was recorded, nor with what this roll is recording) */
 static uint32_t roll_lanes(const track_t *t)
@@ -2013,7 +2053,7 @@ static int roll_has(const track_t *t, uint32_t note)
 static void roll_hit(uint32_t r)
 {
     track_t *t = &trk[roll[r].trk % NTRK];
-    uint32_t u = BEAT_U / roll_den(), su = div_units((uint32_t)t->p[P_SDIV]);
+    uint32_t u = roll_u(), su = div_units((uint32_t)t->p[P_SDIV]);
     uint32_t hits = su / u, rat = hits > 4u ? 3u : hits > 1u ? hits - 1u : 0u;
     uint32_t armed = ((song.rec >> trk_index(t)) & 1u) && song.playing, later, abs = 0, rec = 0;
     if (armed) {                                     /* one recorded hit a step: the ratchet does the rest */
@@ -2042,7 +2082,7 @@ static void roll_hit(uint32_t r)
 
 static void roll_start(uint32_t k, track_t *t, uint32_t note, uint32_t lvl)
 {
-    uint32_t r, den = roll_den(), into, slen, abs;
+    uint32_t r, into, slen, abs;
     for (r = 0; r < NROLL && roll[r].on; r++)
         ;
     if (r == NROLL)
@@ -2055,7 +2095,7 @@ static void roll_start(uint32_t k, track_t *t, uint32_t note, uint32_t lvl)
     roll[r].off = 0;
     roll[r].rec_abs = SEQ_NONE;
     if (song.playing) {
-        abs = grid_den(den, 0, &into, &slen);
+        abs = grid_roll(0, &into, &slen);
         roll[r].last = abs;
         if (into * 4u >= slen * 3u)
             return;                                  /* the grid is just ahead: it starts there */
@@ -2078,7 +2118,7 @@ static void roll_end(uint32_t r)
 
 static void roll_block(uint32_t adv)
 {
-    uint32_t r, den = roll_den(), u = BEAT_U / den, into, slen;
+    uint32_t r, u = roll_u(), into, slen;
     for (r = 0; r < NROLL; r++) {
         if (!roll[r].on)
             continue;
@@ -2092,7 +2132,7 @@ static void roll_block(uint32_t adv)
             }
         }
         if (song.playing) {
-            uint32_t abs = grid_den(den, 0, &into, &slen);
+            uint32_t abs = grid_roll(0, &into, &slen);
             if (abs != roll[r].last) {
                 roll[r].last = abs;
                 roll_hit(r);
@@ -2218,6 +2258,16 @@ static void key_down(uint32_t k)
         kb_nt[k][0] = (uint8_t)layer;                 /* (its key-up goes to the same layer) */
         lk_push(layer, k, 1);
         return;
+    case LY_ROLL: {                                   /* (INFUR) a black key sets the rate while held */
+        int32_t b = roll_black(k);
+        if (b >= 0) {
+            roll_key_rate = (uint8_t)b;
+            roll_rate_key = (uint8_t)k;
+            kb_kind[k] = KS_RATE;
+            return;
+        }
+        break;                                        /* a white key: the roll itself, further down */
+    }
     case LY_ERASE:
         if (is_drum(t) && punch_key(k) < 0) {        /* (2.6) a black key: erase <-> mute */
             er_mute = (uint8_t)!er_mute;
@@ -2348,6 +2398,13 @@ static void key_up(uint32_t k)
         for (i = 0; i < NROLL; i++)
             if (roll[i].on && roll[i].key == k)
                 roll_end(i);
+        return;
+    case KS_RATE:                                   /* (INFUR) back to GLO > MASTER > ROLL, unless another
+                                                     * black key took the rate over meanwhile */
+        if (roll_rate_key == k) {
+            roll_key_rate = 0xFFu;
+            roll_rate_key = 0xFFu;
+        }
         return;
     case KS_NOTE:
         mc = trk_midi_ch(kb_trk[k] % NTRK);

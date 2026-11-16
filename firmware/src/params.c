@@ -63,7 +63,8 @@ static const char *const N_GO[] = {"--", "GO"};
 static const char *const N_SLCR[] = {"OFF", "GATE", "STUT"};             /* SL_OFF .. SL_STUT (slicer.c) */
 static const char *const N_SLDIV[] = {"1/8", "1/16", "1/32", "8T", "16T", "32T"};   /* SL_DEN */
 static const char *const N_CHORD[] = {"OFF", "TRIAD", "7TH", "9TH", "SUS4", "POWER"};   /* seq.c CHORD_DEG */
-static const char *const N_ROLL[] = {"1/8", "1/16", "1/32", "32T", "1/64"};   /* seq.c ROLL_DEN */
+static const char *const N_ROLL[] = {"1/2", "1/4", "4T", "1/8", "8T", "1/16", "16T", "1/32", "32T", "1/64"};
+                                              /* (INFUR) slow to fast; seq.c ROLL_HITS / ROLL_BEATS */
 static const char *const N_ENGNAME[] = {"ANALOG", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN",
                                         "FM6", "PHYS", "NOISE",
 #if FELUCCA_SLICE
@@ -184,7 +185,7 @@ static const param_desc_t GP[G_COUNT] = {
     [G_DUST] = PD("DUST", F_PCT, 0, 127, 0),
     [G_DUCK] = PD("DUCK", F_PCT, 0, 127, 0),
     [G_FILT] = PD("FILT", F_FILT, -64, 63, 0),
-    [G_ROLL] = PE("ROLL", N_ROLL, 1),
+    [G_ROLL] = PE("ROLL", N_ROLL, 5),            /* (INFUR) 1/16 is index 5 in the ten-rate list */
     [G_NEWPRJ] = PE("NEW", N_GO, 0),
     [G_DRDLY] = PD("DLY", F_INT, 0, 127, 0),
     [G_CH1] = PE("CH1", N_MCH, 1),                /* 2.6, GLO > MIDI: synth track 1's channel, in and out (OFF: */

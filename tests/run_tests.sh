@@ -169,6 +169,16 @@ mkdir -p build/fm6_demo
 run "FM6: algorithms, envelopes, retrigger, DC, clipping, macros, patch formats, voices, the bank, demos" "$OUT/fm6_test" build/fm6_demo
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/noise_clock_test" tests/noise_clock_test.c -lm
 run "NOISE LFSR: the clock follows the keys past the sample rate (NZ ARCADE, clipper-fm1 #10)" "$OUT/noise_clock_test"
+# (INFUR) the ten roll rates. It goes through the browser adapter, which needs clang: the GCC build of
+# that adapter does not finish on Linux (tests/run_preview_tests.sh says the same).
+if command -v clang >/dev/null 2>&1; then
+    clang -O2 -fwrapv -fno-strict-aliasing -w -Ibuild/gen -Ifirmware/src -o "$OUT/roll_rate_test" \
+        tests/roll_rate_test.c -lm
+    run "the ten roll rates: their hits land on the grid, 1/2 and 4T included (ROLL_HITS / ROLL_BEATS)" \
+        "$OUT/roll_rate_test"
+else
+    echo "== the ten roll rates: skipped (no clang)"
+fi
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/sample_pitch_test" tests/sample_pitch_test.c -lm
 run "SAMPLE, GRAIN: the pitch follows the keys to the top of the keyboard (up to the decode bound)" "$OUT/sample_pitch_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/grain_release_test" tests/grain_release_test.c -lm

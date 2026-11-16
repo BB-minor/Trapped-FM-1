@@ -520,7 +520,7 @@ UI_SMALL static void layer_knobs(uint32_t layer)
             break;
         case LY_ROLL:
             if (k == 0u)
-                song.g[G_ROLL] = (int16_t)clamp(song.g[G_ROLL] + s, 0, 4);
+                song.g[G_ROLL] = (int16_t)clamp(song.g[G_ROLL] + s, 0, (int32_t)NROLL_RATE - 1);
             break;
         case LY_STEP:
             if (ui.step_held) {                         /* SOUND / NOTE  LEVEL  RATCHET  NUDGE */
