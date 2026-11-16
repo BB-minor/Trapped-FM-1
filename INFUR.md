@@ -99,6 +99,22 @@ Recovery routes: USB RESCUE (hold OCT- at power-on) · M-UPGRADE with V16 · Cli
 installer page "Return to the official firmware" (works with SLOOP installed) ·
 FM1 Open's workbench (returns to V15) · FM-1-transporter if it will not boot at all.
 
+## Agenda — raised, parked, to come back to
+
+Asked for on 16/11/2026, to be brought up again rather than answered on the spot. Some of these are
+questions about what the firmware already does, not work to be done; they are listed as they were asked.
+
+1. **Overall tempo setting** — where the song's tempo lives and how it is set.
+2. **Pattern length: how many bars?** — LEN is in steps (1..64) and the bars depend on DIV, so a 64-step
+   track is four bars at 1/16 and two and two thirds at 16T.
+3. **Drums quantised by default?** — what REC's QUANT does and what it is set to out of the box.
+4. **Overall scale setting** — one key and scale across the three synth tracks.
+5. **Harmony quantised by default?** — as 3, for the synth tracks.
+6. **Humanisation** — nothing like it exists today. QUANT off keeps the timing played, as a per-step
+   nudge; a humanise that *adds* a spread does not exist and would be new work.
+7. **Generative harmony pattern** — does not exist. New work; worth scoping against the voice budget and
+   the four-notes-a-step ceiling before anything is promised.
+
 ## Known
 
 `tests/run_tests.sh` reports four `target:` entries over budget (`sample_render`,
