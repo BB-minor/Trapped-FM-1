@@ -250,6 +250,27 @@ static uint32_t kb_map(const track_t *t, uint32_t k)
     return kb_pitch(t, k, song.octave);
 }
 
+/* (INFUR) the two rightmost black keys, D#5 and F#5, held: a synth key plays soft or hard.
+ * The FM-1's keys have no velocity sensor. The drum track has had OCT- / OCT+ for ghost and hard since
+ * Felucca, but a synth part played 100 whatever you did, so there was no way to play dynamics into a
+ * harmony or a melody at all without a MIDI keyboard -- and a pattern at one velocity is the thing that
+ * makes a part sound typed. Left softer, right louder, as the octave buttons are on the drums.
+ * Only where those two keys are silent anyway: QNT WHITE (the default) and chord mode. With QNT OFF or
+ * SNAP they play their own note, as they always did. The levels are lvl_vel's SOFT and HARD, so a key
+ * and a step edited to the same name sound the same. */
+#define KEY_VSOFT 22u                            /* D#5 */
+#define KEY_VHARD 25u                            /* F#5 */
+static uint32_t kb_map(const track_t *t, uint32_t k);
+static uint32_t key_vel_syn(const track_t *t)
+{
+    uint32_t held = fm1_in.notes;
+    if ((held & (1u << KEY_VHARD)) && kb_map(t, KEY_VHARD) == KB_SILENT)
+        return 127u;                             /* HARD */
+    if ((held & (1u << KEY_VSOFT)) && kb_map(t, KEY_VSOFT) == KB_SILENT)
+        return 72u;                              /* SOFT */
+    return 100u;                                 /* NORM, as it always was */
+}
+
 /* chord mode (P_CHORD): the chord of the scale built on note n (in the scale; CHR: minor), into c[];
  * the notes it holds (<= 4, the most a step keeps) */
 static const int8_t CHORD_DEG[6][4] = {
@@ -2285,7 +2306,7 @@ static void midi_fx(uint32_t note, int on)
 
 static void key_down(uint32_t k)
 {
-    uint32_t layer = layer_now(), sel = song.sel % NTRK, i, mc;
+    uint32_t layer = layer_now(), sel = song.sel % NTRK, i, mc, kv;
     track_t *t = &trk[sel];
     kb_kind[k] = KS_NONE;
     kb_trk[k] = (uint8_t)sel;
@@ -2408,13 +2429,14 @@ static void key_down(uint32_t k)
         }
         mc = trk_midi_ch(sel);
         in_key = (uint8_t)(k + 1u);                 /* (the arp keeps the key: arp_add, #191) */
+        kv = key_vel_syn(t);                        /* (INFUR) D#5 / F#5 held: soft / hard */
         for (i = 0; i < kb_n[k]; i++) {
             in_chord = kb_n[k] > 1u ? kb_nt[k] : 0;
             in_chord_n = kb_n[k];
             in_chord_i = i;
-            input_on(t, kb_nt[k][i], 100);
+            input_on(t, kb_nt[k][i], kv);
             in_chord = 0;
-            midi_out_note(mc, (uint32_t)kb_nt[k][i], 100u);
+            midi_out_note(mc, (uint32_t)kb_nt[k][i], kv);
         }
         in_key = 0;
         /* the pen of the SEQ layer: the keys down now (a chord), else this note */

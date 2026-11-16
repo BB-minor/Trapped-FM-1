@@ -167,6 +167,9 @@ run "SLICER: no clicks, timing, sync with the sequencer, STUT, cost, demos" "$OU
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/fm6_test" tests/fm6_test.c -lm
 mkdir -p build/fm6_demo
 run "FM6: algorithms, envelopes, retrigger, DC, clipping, macros, patch formats, voices, the bank, demos" "$OUT/fm6_test" build/fm6_demo
+$CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/keyvel_test" tests/keyvel_test.c -lm
+run "(INFUR) D#5 / F#5 held: soft and hard on a synth track, and notes again with QNT OFF" \
+    "$OUT/keyvel_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/humanize_test" tests/humanize_test.c -lm
 run "(INFUR) HUMAN: the spread is bounded, centred and triangular; drums in time only; accents kept" \
     "$OUT/humanize_test"
