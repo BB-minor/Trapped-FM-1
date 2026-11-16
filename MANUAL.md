@@ -280,10 +280,35 @@ The ceilings that bite are **four distinct patterns** and **sixteen section chan
 **And the device holds one song at a time.** Four sections is an intro, a verse, a chorus and a bridge,
 and that is all of it until you move the song off.
 
-To keep more than that, use the web editor: it stores **songs as files on the computer**, as many as you
-like, with a playlist to load them back. So the workflow on the move is: make a song, back it up over
-USB, start the next one. The autosave means nothing is lost by switching off, but starting a new song
-does overwrite the sections of the last one if you have not exported it.
+To keep more than that, save an editor **Backup** file per song (Song & sections tab) and restore the
+one you want. As many as you like on the computer. The workflow on the move is: finish a song, back it
+up over USB, start the next. The autosave means nothing is lost by switching off, but starting a new
+song overwrites the last one's sections if it was not backed up.
+
+### What the computer can and cannot do without the FM-1
+
+The editor is storage and a remote control. It is **not a player**: a backup is restored *to the FM-1*,
+which plays it.
+
+| | Needs the FM-1 |
+| --- | --- |
+| Keeping many songs, as backup files | no |
+| Editing a song's patterns, notes, kits, mix | no |
+| **Hearing it** | **yes** |
+| **Getting audio out of it** | **yes, and in real time** |
+| Getting the notes into a DAW | no — **Export MIDI**, a track at a time |
+
+**There is no offline bounce.** The editor's **record set** records the FM-1's USB audio to a WAV while
+it plays, so the device has to be connected and running. You cannot open a backup away from the device
+and render it.
+
+The browser does carry a WebAssembly build of the firmware's engines, but it is for the editor's
+simulated mode (`?mock=1`, no device) and auditions patterns rather than arrangements — it will not
+play a song back.
+
+**Export MIDI** is the way out without the hardware: a track's pattern as a `.mid` with its notes,
+lengths, levels and accents at the song's tempo, the drum track as GM notes on channel 10. A track and
+a pattern at a time, not the arrangement — the notes travel, the sound does not.
 
 ## 11. Limits worth knowing
 
