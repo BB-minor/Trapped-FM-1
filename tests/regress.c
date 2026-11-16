@@ -265,6 +265,11 @@ static void job_song(const job_t *j)
     host_preset(t1, 0, 4);
     host_preset(t2, 1, 5);
     host_preset(t3, 3, 0);
+    t1->p[P_SLEN] = 16;                     /* (INFUR) said, not left to the default: these renders wrote
+                                             * 16 steps and looped them because LEN defaulted to 16, and
+                                             * the default is 64 now. The music is the same; the test just
+                                             * no longer leans on a value it does not set */
+    trk[TRK_DRUM].p[P_SLEN] = 16;
     for (i = 0; i < 16u; i++) {
         uint8_t n = ACID[i];
         put_step(t1, i, n ? 1u : 0u, &n, n ? ST_NOTE : ST_REST, ACIDF[i]);

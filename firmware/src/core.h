@@ -116,6 +116,8 @@ enum {                          /* global parameters */
                                  * UPDN (seq.c rshape). A setting of the FM-1 */
     G_DIVE,                     /* (INFUR) GLO > MASTER 2: how far F#5 in the ROLL layer dives the selected
                                  * track's pitch, 0..24 semitones (0 off). A setting of the FM-1 */
+    G_HUMAN,                    /* (INFUR) SAVE > TOOLS: humanise the selected track's pattern (seq.c humanize).
+                                 * A GO button like CLRSQ: nothing is stored, it acts and goes back to 0 */
     G_CLIP,                     /* (INFUR) GLO > MASTER 2: the master soft clipper's drive, 0 off (fx.c clip_thr: it
                                  * lifts the limiter's threshold so the mix drives the output knee). In a project
                                  * (project.c: the spare bits of the byte TEXTURE's MOVE rides in) */

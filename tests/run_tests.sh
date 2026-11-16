@@ -167,6 +167,9 @@ run "SLICER: no clicks, timing, sync with the sequencer, STUT, cost, demos" "$OU
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/fm6_test" tests/fm6_test.c -lm
 mkdir -p build/fm6_demo
 run "FM6: algorithms, envelopes, retrigger, DC, clipping, macros, patch formats, voices, the bank, demos" "$OUT/fm6_test" build/fm6_demo
+$CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/humanize_test" tests/humanize_test.c -lm
+run "(INFUR) HUMAN: the spread is bounded, centred and triangular; drums in time only; accents kept" \
+    "$OUT/humanize_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/noise_clock_test" tests/noise_clock_test.c -lm
 run "NOISE LFSR: the clock follows the keys past the sample rate (NZ ARCADE, clipper-fm1 #10)" "$OUT/noise_clock_test"
 # (INFUR) the ten roll rates. It goes through the browser adapter, which needs clang: the GCC build of

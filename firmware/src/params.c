@@ -104,9 +104,11 @@ static const param_desc_t TP[P_COUNT] = {
     [P_AORDER] = PE("ORD", N_ORDER, 0),
     [P_ROOT] = PD("ROOT", F_NOTE, 0, 11, 0),
     [P_SCALE] = PE("SCL", N_SCALE, 0),
-    [P_QUANT] = PE("QNT", N_QUANT, 0),
+    [P_QUANT] = PE("QNT", N_QUANT, 2),           /* (INFUR) WHITE: the white keys walk the scale, the
+                                                  * black ones silent. OFF is still there for a note
+                                                  * deliberately outside the key */
     [P_TRANS] = PD("TRN", F_SEMI, -24, 24, 0),
-    [P_SLEN] = PD("LEN", F_STEPS, 1, NSTEP, 16),
+    [P_SLEN] = PD("LEN", F_STEPS, 1, NSTEP, 64),   /* (INFUR) 64 at 1/16 = four bars, one view always */
     [P_SDIV] = PE("DIV", N_SDIV, 2),
     [P_SSWING] = PD("SWG", F_SWING, 0, 100, 0),
     [P_SGATE] = PD("GATE", F_PCT, 1, 127, 64),
@@ -129,7 +131,8 @@ static const param_desc_t TP[P_COUNT] = {
     [P_CHORD] = PE("CHORD", N_CHORD, 0),
     [P_TFLT] = PD("FILT", F_FILT, -64, 63, 0),
     [P_STRUM] = PD("STRUM", F_INT, -60, 60, 0),   /* ms a note: > 0 low to high (down), < 0 high to low */
-    [P_VLEAD] = PE("VLEAD", N_ONOFF, 0),
+    [P_VLEAD] = PE("VLEAD", N_ONOFF, 1),         /* (INFUR) on: each chord voiced nearest the last.
+                                                  * Does nothing until CHORD is set, so it costs nothing */
     /* 2.6, after Felucca 1.5 / 1.4. The INSERT (fx.c track_insert): TYPE OFF = as before. A B C as the editor
      * protocol names them; the device shows the type's own labels (ins_desc) */
     [P_ITYPE] = PE("INSRT", N_ITYPE, 0),
@@ -156,7 +159,9 @@ static void preset_extras(int16_t *p, const preset_t *pr)
 
 
 static const param_desc_t GP[G_COUNT] = {
-    [G_BPM] = PD("BPM", F_BPM, 40, 240, 90),
+    [G_BPM] = PD("BPM", F_BPM, 40, 240, 144),   /* (INFUR) a trap tempo to start from; the range is left
+                                                 * wide, an option costs nothing and external sync writes
+                                                 * this too (seq.c mclk_tempo, its own 40..240 clamp) */
     [G_SWING] = PD("SWING", F_SWING, 0, 100, 0),
     [G_CLOCK] = PE("CLICK", N_CLICK, 0),            /* (the old CLK slot: projects keep their format) */
     [G_TUNE] = PD("TUNE", F_INT, -50, 50, 0),
@@ -179,6 +184,7 @@ static const param_desc_t GP[G_COUNT] = {
     [G_ENGSEL] = PE("ENG", N_ENGNAME, 0),
     [G_ENGGO] = PE("SET", N_GO, 0),
     [G_CLRSEQ] = PE("CLRSQ", N_GO, 0),
+    [G_HUMAN] = PE("HUMAN", N_GO, 0),            /* (INFUR) SAVE > TOOLS: humanise the pattern (seq.c) */
     [G_INITSND] = PE("INIT", N_GO, 0),
     [G_DRCH] = PE("CH4", N_MCH, 10),                  /* GM drum part (track 4) MIDI channel, 0 = OFF (2.6: as GLO > MIDI's CH1..3) */
     [G_DRLVL] = PD("LVL", F_INT, 0, 127, 100),
@@ -441,7 +447,7 @@ static const page_t PAGES[] = {
     {"PRESETS", FAM_SAVE, SC_GLOBAL, GR_BROWSE, {0xFF, 0xFF, 0xFF, 0xFF}},   /* browser: PRESETS knob / KNOB 1 */
     {"USER", FAM_SAVE, SC_GLOBAL, GR_USER, {0xFF, 0xFF, 0xFF, 0xFF}},       /* user presets: SLOT LOAD ERASE SAVE */
     {"SECTION", FAM_SAVE, SC_GLOBAL, GR_SLOTS, {G_SLOT, 0xFF, G_LOAD, G_SAVE}},   /* ("PROJECT" before 2.7) */   /* (KNOB 2: ERASE, 2.6: ui_input.c) */
-    {"TOOLS", FAM_SAVE, SC_GLOBAL, GR_NONE, {G_CLRSEQ, G_INITSND, 0xFF, G_NEWPRJ}},
+    {"TOOLS", FAM_SAVE, SC_GLOBAL, GR_NONE, {G_CLRSEQ, G_INITSND, G_HUMAN, G_NEWPRJ}},
     {"ARP", FAM_ARP, SC_TRACK, GR_NONE, {P_AMODE, P_ARATE, P_AOCT, P_AGATE}},   /* (2.7.2: its values large, as ARP 2:
                                                        * GR_ARP was never drawn, the middle stayed empty) */
     {"ARP 2", FAM_ARP, SC_TRACK, GR_NONE, {P_ASWING, P_APROB, P_AHOLD, P_AORDER}},

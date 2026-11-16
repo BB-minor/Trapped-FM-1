@@ -566,7 +566,8 @@ UI_SMALL static void edit_param(uint32_t slot, int32_t steps)
         ml_knob(TSEL, id);                                /* MIDI LEARN: this parameter (2.6) */
     if (!v)
         return;
-    if (pg->scope == SC_GLOBAL && (id == G_LOAD || id == G_SAVE || id == G_CLRSEQ || id == G_INITSND || id == G_NEWPRJ) &&
+    if (pg->scope == SC_GLOBAL && (id == G_LOAD || id == G_SAVE || id == G_CLRSEQ || id == G_INITSND ||
+                                   id == G_HUMAN || id == G_NEWPRJ) &&
         ui.arm != id) {                                   /* one detent arms, a second one within ~1.5 s acts */
         *vp = 0;
         ui.arm = (uint8_t)id;
@@ -594,6 +595,15 @@ UI_SMALL static void edit_param(uint32_t slot, int32_t steps)
         fm1_irq_on();
         ui_message("PATTERN CLEARED");
         break;
+    case G_HUMAN: {                                   /* (INFUR) humanise the selected track */
+        uint32_t n = humanize(TSEL);
+        *vp = 0;
+        if (n)
+            ui_message("HUMANISED");
+        else
+            ui_message("NOTHING TO HUMANISE");
+        break;
+    }
     case G_INITSND:
         *vp = 0;
         set_engine(TSEL->eng_req);                              /* engine defaults + its first preset */

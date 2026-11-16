@@ -42,8 +42,9 @@
 _Static_assert(G_DRDLY == PROJ_NG && G_TXSRC == PROJ_NG + 5u,
                "the globals a project holds, then G_DRDLY (then 2.6's GLO > MIDI: settings of the FM-1)");
 _Static_assert(G_FXFADE == G_CLKOUT + 1u && G_CEIL == G_FXFADE + 1u && G_RSHAPE == G_CEIL + 1u &&
-               G_DIVE == G_RSHAPE + 1u && G_CLIP == G_DIVE + 1u && G_COUNT == G_CLIP + 1u,
-               "G_FXFADE, then CEIL / ROLL~ / DIVE (settings of the FM-1), then G_CLIP (in a project)");
+               G_DIVE == G_RSHAPE + 1u && G_HUMAN == G_DIVE + 1u && G_CLIP == G_HUMAN + 1u &&
+               G_COUNT == G_CLIP + 1u,
+               "G_FXFADE, CEIL / ROLL~ / DIVE (the FM-1's), G_HUMAN (a GO button), then G_CLIP");
 #define PROJ_NC6 ((uint32_t)P_ITYPE)           /* format 6: the parameters kept in 16 bits, P_LEVEL .. P_VLEAD (as 5), */
 #define PROJ_NX6 ((uint32_t)(P_E0 - P_ITYPE))  /* the 2.6 ones in a byte (0..127), then P_E0 .. P_E7 */
 _Static_assert(PROJ_NC6 == PROJ_NP_V5 - 8u && PROJ_NX6 == 10u, "format 6: format 5's parameters, then ten bytes");

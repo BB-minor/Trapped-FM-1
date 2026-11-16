@@ -468,6 +468,56 @@ static void undo_mark(const track_t *t, uint32_t sess)
     undo.undone = 0;
 }
 #define UNDO_REC(t) (((t)->pass << 2) | 1u)      /* a recording pass of track t */
+
+/* (INFUR) SAVE > TOOLS > HUMAN: a pattern played in with QUANT on sits exactly on the grid, and that
+ * is what makes it sound typed rather than played. This spreads the selected track's timing, and a
+ * synth track's velocities, by a little: enough that the grid stops showing, not so much that it reads
+ * as sloppiness.
+ *
+ * The spread is triangular -- two draws averaged -- so most steps barely move and a large move is rare,
+ * which is how a player's timing actually sits around a beat; a flat random spread sounds drunk rather
+ * than human. Timing is in 64ths of a step, so +-6 is about +-10 ms on a 1/16 grid at 144 BPM, inside
+ * the +-5..15 ms a good player lands in.
+ *
+ * Two things it deliberately leaves alone. A drum step's level is two bits -- GHOST, SOFT, NORM, HARD --
+ * so the smallest velocity move there is a jump of a whole level, which is not subtlety; drums get
+ * timing only. And a synth note's length is counted in whole steps (the TIEs after it), so the smallest
+ * change to a duration is one entire step, far too coarse to pass for a human hand.
+ *
+ * An accented step keeps its velocity (the accent is a decision, not an accident) but is still moved in
+ * time. One undo takes the whole thing back (EDIT + OCT-). */
+#define HUMAN_T 6                                /* 64ths of a step */
+#define HUMAN_V 10                               /* of 127 */
+static uint32_t human_rnd = 0x9E3779B9u;
+static int32_t human_spread(int32_t amt)
+{
+    int32_t a, b;
+    human_rnd = human_rnd * 1664525u + 1013904223u;
+    a = (int32_t)((human_rnd >> 13) % (uint32_t)(2 * amt + 1)) - amt;
+    human_rnd = human_rnd * 1664525u + 1013904223u;
+    b = (int32_t)((human_rnd >> 13) % (uint32_t)(2 * amt + 1)) - amt;
+    return (a + b) / 2;
+}
+static uint32_t humanize(track_t *t)
+{
+    uint32_t i, len = trk_len(t), n = 0;
+    undo_mark(t, (undo_sess += 4u) | 3u);
+    fm1_irq_off();
+    for (i = 0; i < len && i < NSTEP; i++) {
+        int has = is_drum(t) ? dstep_mask(&t->dstep[i]) != 0u
+                             : (t->step[i].time == ST_NOTE && t->step[i].n != 0u);
+        if (!has)
+            continue;
+        n++;
+        t->micro[i] = (int8_t)clamp(t->micro[i] + human_spread(HUMAN_T), MICRO_MIN, MICRO_MAX);
+        if (!is_drum(t) && !(t->step[i].flags & SF_ACCENT)) {
+            int32_t v = t->step[i].vel ? t->step[i].vel : 96;   /* 0 means 96 (step_vel) */
+            t->step[i].vel = (uint8_t)clamp(v + human_spread(HUMAN_V), 1, 127);
+        }
+    }
+    fm1_irq_on();
+    return n;
+}
 static uint32_t undo_erase_sess;
 
 /* ------------------------------------------------------- recording --- */
