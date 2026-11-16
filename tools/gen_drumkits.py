@@ -213,6 +213,20 @@ KITS = [
         CLAP=dict(nlev=126, ndec=170, filt=("bp", 1500, .4), hpf=1100),
         CHH=dict(ndec=26, filt=("bp", 10500, .45), hpf=9000),
         OHH=dict(ndec=260))),
+    # (INFUR) the kit this firmware is for. The 808 lives on synth 1, so this kick is not asked to be
+    # the sub as well: it sits higher and shorter and is driven hard, to cut through an 808 rather than
+    # fight it for the same octave. The hats are short enough that a 32T or 1/64 roll stays separate
+    # hits instead of smearing. Drive is per lane, so the kick saturates and the hats stay clean.
+    ("INFUR", "TRAP", 0, kit(K808,
+        KICK=S("sine", 62, 20, 22, 6, 210, 124, click=62, drive=84, filt=("lp", 4200, .12, "all")),
+        KICK2=S("sine", 54, 16, 28, 10, 300, 124, click=44, drive=66),
+        SNARE=S("tri", 205, 7, 10, 0, 95, 84, 1.7, 62, 44, "white", 118, 6, 160, ("hp", 2400, .22), drive=34),
+        SNARE2=S("tri", 250, 6, 8, 0, 60, 80, 1.6, 54, 48, "white", 104, 0, 100, ("bp", 5200, .4), drive=24),
+        CLAP=dict(nlev=126, ndec=150, filt=("bp", 1600, .42), hpf=1200),
+        CHH=dict(ndec=18, filt=("bp", 11000, .5), hpf=9500),
+        OHH=dict(ndec=240, filt=("bp", 9000, .4), hpf=7500),
+        SHAKER=dict(ndec=34),
+        RIM=dict(hz=2100, decay=26, tlev=104))),
     ("DRILL", "UK DRILL", 0, kit(K808,
         KICK=S("sine", 50, 14, 30, 8, 380, 124, click=44, drive=26),
         KICK2=S("sine", 44, 12, 220, 40, 1900, 124, click=16, drive=44),            # the sliding 808
