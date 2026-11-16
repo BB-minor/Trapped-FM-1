@@ -115,7 +115,11 @@ questions about what the firmware already does, not work to be done; they are li
 5. **Harmony quantised by default?** — as 3, for the synth tracks.
 6. **Humanisation** — nothing like it exists today. QUANT off keeps the timing played, as a per-step
    nudge; a humanise that *adds* a spread does not exist and would be new work.
-7. **Generative harmony pattern** — does not exist. New work; worth scoping against the voice budget and
+7. **Revisit the drum sounds** (parked 16/11/2026) — the INFUR kit was voiced and its levels measured,
+   but not yet heard properly. The kick (62 Hz, 210 ms, drive 84) and the hats (decay 18) are the two
+   to judge first. Every one of them is a number in `tools/gen_drumkits.py`; changing any means
+   re-running the level loop (`drum_level` + `level_drumkits.py`, twice) afterwards.
+8. **Generative harmony pattern** — does not exist. New work; worth scoping against the voice budget and
    the four-notes-a-step ceiling before anything is promised.
 
 ## Known
