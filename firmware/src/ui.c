@@ -713,6 +713,9 @@ UI_SMALL static void select_engine(uint32_t e)
 enum { BK_BASS, BK_KEYS, BK_ORGAN, BK_PAD, BK_LEAD, BK_PLUCK, BK_STAB, BK_FX };
 static const char *const BANK_KIND[] = {"BASS", "KEYS", "ORGN", "PAD", "LEAD", "PLCK", "STAB", "FX"};
 static const struct { uint8_t kind, e; const char *name; } BANK[] = {
+    /* (INFUR) the four INFUR 808s first: the signature sound, so PRESETS opens on them */
+    {BK_BASS, 0, "INFUR 808"}, {BK_BASS, 0, "INFUR SUB"}, {BK_BASS, 0, "INFUR GLD"},
+    {BK_BASS, 0, "INFUR HRD"},
     {BK_BASS, 0, "808 BOOM"}, {BK_BASS, 0, "808 DIRTY"}, {BK_BASS, 0, "808 SLIDE"}, {BK_BASS, 0, "SUB BASS"},
     {BK_BASS, 0, "PLUGG BASS"}, {BK_BASS, 0, "REESE"}, {BK_BASS, 0, "WOBBLE"}, {BK_BASS, 0, "ACID 303"},
     {BK_BASS, 1, "FM BASS"}, {BK_BASS, 2, "CZ BASS"}, {BK_BASS, 6, "FAT BASS"}, {BK_BASS, 0, "FUNK BASS"},

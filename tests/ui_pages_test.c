@@ -171,6 +171,10 @@ int main(int argc, char **argv)
     settings.palette = 4;
     palette_set(4);
     host_tracks_init();
+    for (i = 0; i < NTRK; i++)
+        trk[i].p[P_SLEN] = 16;                       /* (INFUR) said, not left to the default: the EDIT length,
+                                                      * step-page and DRUMS cursor checks below are written for a
+                                                      * 16-step pattern, and LEN defaults to 64 now */
     for (i = 0; i < NPART; i++) { set_engine_of(&trk[i], TRK_DEF[i][0]); apply_preset_to(&trk[i], TRK_DEF[i][1]); trk[i].engine = trk[i].eng_req; }
     TDRUM->p[P_E0] = DRUM_DEFAULT_KIT;
     sloop_splash(); ppm("page-splash");

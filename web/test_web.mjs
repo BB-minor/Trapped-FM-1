@@ -643,7 +643,7 @@ async function editorV5() {
   const C = E.CMD;
   const { m, rq, ev, done } = attachMock({ watchMs: 1000 });
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.proto === 12 && /SLOOP/.test(info.version) && info.pcount === 71 && info.gcount === 50 && info.pe0 === 63, "v5..v12: INFO ends with the protocol version (12: LIVE); 50 globals (2.5: drum DLY; 2.6: GLO > MIDI, TEXTURE, BEND; 2.7: FX CH, DR MAP, REMOTE, CLK OUT; 2.7.2: FX FADE)");
+  ok(info.proto === 12 && /SLOOP/.test(info.version) && info.pcount === 71 && info.gcount === 56 && info.pe0 === 63, "v5..v12: INFO ends with the protocol version (12: LIVE); 56 globals (2.5: drum DLY; 2.6: GLO > MIDI, TEXTURE, BEND; 2.7: FX CH, DR MAP, REMOTE, CLK OUT; 2.7.2: FX FADE; INFUR: TEXTURE NOTE, CEIL, ROLL~, DIVE, HUMAN, CLIP)");
   /* the firmware says the same: ED_DRUM_STEP is command 33, INFO sends 5, P_CHORD / the master globals as the mock has them */
   const ec = readFileSync(join(HERE, "../firmware/src/editor.c"), "utf8"), pc = readFileSync(join(HERE, "../firmware/src/params.c"), "utf8");
   const en = (/enum \{ ED_INFO = 1,([^}]*)\}/.exec(ec) || [])[1] || "";
@@ -662,9 +662,9 @@ async function editorV5() {
   const gd = [];
   for (let i = 27; i < 32; i++) gd.push(E.parse[C.DESC](await rq(E.req.desc(1, i))));
   ok(chord.label === "CHORD" && chord.names.join() === enumNames("N_CHORD").join() && /\[P_CHORD\] = PE\("CHORD", N_CHORD, 0\)/.test(pc)
-    && gd.map((d) => d.label).join() === "DUST,DUCK,FILT,ROLL,NEW" && gd[3].names.join() === enumNames("N_ROLL").join() && gd[3].def === 1
+    && gd.map((d) => d.label).join() === "DUST,DUCK,FILT,ROLL,NEW" && gd[3].names.join() === enumNames("N_ROLL").join() && gd[3].def === 5
     && /\[G_DUST\] = PD\("DUST", F_PCT, 0, 127, 0\)/.test(pc) && /\[G_FILT\] = PD\("FILT", F_FILT, -64, 63, 0\)/.test(pc)
-    && /\[G_ROLL\] = PE\("ROLL", N_ROLL, 1\)/.test(pc) && /\[G_NEWPRJ\] = PE\("NEW", N_GO, 0\)/.test(pc),
+    && /\[G_ROLL\] = PE\("ROLL", N_ROLL, 5\)/.test(pc) && /\[G_NEWPRJ\] = PE\("NEW", N_GO, 0\)/.test(pc),
     "v5: CHORD, DUST, DUCK, FILT, ROLL, NEW (mock == params.c)");
   /* the value formats (params.c fmt_value) */
   const fv = (fmt, v, max = 127, min = 0) => E.fmtValue({ fmt, min, max, names: [] }, v).join("");
@@ -1044,8 +1044,8 @@ async function editorDsyn() {
   if (hdr) {
     const kits = [...hdr.matchAll(/\{"([^"]*)", "[^"]*", (0x[0-9A-Fa-f]+|\d+), \{([\s\S]*?)\}\},/g)];
     const bytes = kits.flatMap((k) => [Number(k[2]), ...[...k[3].matchAll(/\{([^{}]*)\},/g)].flatMap((r) => r[1].split(",").map((x) => +x & 255))]);
-    ok(kits.length === 32 && js(kits.map((k) => k[1])) === js(E.DSYN_MOCK_NAMES) && js(Array.from(raw)) === js(bytes),
-      "dsyn: the mock's 32 kits == build/gen/felucca_drumkits.h");
+    ok(kits.length === 33 && js(kits.map((k) => k[1])) === js(E.DSYN_MOCK_NAMES) && js(Array.from(raw)) === js(bytes),
+      "dsyn: the mock's 33 kits == build/gen/felucca_drumkits.h");
   }
   /* viewing never changes a value: decode / encode give every factory sound back */
   let same = true;
@@ -1061,7 +1061,9 @@ async function editorDsyn() {
   ok(Math.round(DSYN.hz(69)) === 440 && Math.round(DSYN.decayMs(127)) === 4000 && Math.round(DSYN.cutHz(0)) === 30 && DSYN.db(132) === 1,
     "dsyn: the units (Hz, ms, cutoff, dB) as tools/gen_tables.py");
   /* files and the backup object */
-  const kit = { name: "MY 808", crush: 0x21, src: 0, sounds: Array.from({ length: 16 }, (_, l) => raw.slice(1 + l * 22, 23 + l * 22)) };
+  /* (INFUR) factory 6 (INFUR), not 0: SYN1 is seeded from DSU_DEF[0], which is the INFUR kit now */
+  const K6 = 6 * 353;
+  const kit = { name: "MY 808", crush: 0x21, src: 6, sounds: Array.from({ length: 16 }, (_, l) => raw.slice(K6 + 1 + l * 22, K6 + 23 + l * 22)) };
   const back = DSYN.fromFile(JSON.parse(JSON.stringify(DSYN.toFile(kit))));
   let bad = "";
   try { DSYN.fromFile({ format: "sloop-drumsynth", sounds: [[1, 2]] }); } catch (e) { bad = e.message; }
@@ -1074,13 +1076,13 @@ async function editorDsyn() {
   let L = E.parse[C.DSYN_LIST](await rq(E.req.dsynList()));
   const g0 = E.parse[C.DSYN_GET](await rq(E.req.dsynGet(DSYN.USER)));
   const f5 = E.parse[C.DSYN_GET](await rq(E.req.dsynGet(5)));
-  ok(L.factory === 32 && L.user === 4 && L.stored && L.names[0] === "808" && L.kits.map((k) => k.name).join() === "808,909,TRAP,TECHNO"
-    && g0.rc === 0 && g0.name === "808" && g0.src === 0 && js(g0.sounds.map((x) => Array.from(x))) === js(kit.sounds.map((x) => Array.from(x)))
-    && f5.rc === 0 && f5.name === "TRAP", "dsyn: LIST (32 + 4, stored), GET SYN1 = the 808, GET a factory kit");
+  ok(L.factory === 33 && L.user === 4 && L.stored && L.names[0] === "808" && L.kits.map((k) => k.name).join() === "INFUR,808,TRAP,DRILL"
+    && g0.rc === 0 && g0.name === "INFUR" && g0.src === 6 && js(g0.sounds.map((x) => Array.from(x))) === js(kit.sounds.map((x) => Array.from(x)))
+    && f5.rc === 0 && f5.name === "TRAP", "dsyn: LIST (33 + 4, stored), GET SYN1 = the INFUR kit, GET a factory kit");
   const o = DSYN.decode(g0.sounds[0]); o.decay = 20; o.wave = 4;
   const p1 = E.parse[C.DSYN_PUT](await rq(E.req.dsynSound(0, 0, DSYN.encode(o))));
   const p2 = E.parse[C.DSYN_PUT](await rq(E.req.dsynHead(0, "BOOM", 0x10, 0)));
-  const p3 = E.parse[C.DSYN_PUT](await rq(E.req.dsynCopy(3, 25)));
+  const p3 = E.parse[C.DSYN_PUT](await rq(E.req.dsynCopy(3, 26)));   /* (INFUR) CHIP: 25 before INFUR was inserted at 6 */
   const pl = E.parse[C.DSYN_PLAY](await rq(E.req.dsynPlay(0, 0, 100)));
   const g1 = E.parse[C.DSYN_GET](await rq(E.req.dsynGet(DSYN.USER)));
   L = E.parse[C.DSYN_LIST](await rq(E.req.dsynList()));

@@ -191,6 +191,10 @@ static int tracks_demo(const char *dir, const char *name, uint32_t solo)
     }
     t2->p[P_SLEN] = 32;
     t2->p[P_SGATE] = 120;
+    t2->p[P_QUANT] = 0;                            /* (INFUR) OFF, said and not left to the default: the keys below
+                                                    * test recording two at once, not the scale. QNT defaults to
+                                                    * WHITE now, which walks the keys onto scale degrees (covered
+                                                    * by seq2's own QNT WHITE checks) */
     for (i = 0; i < 32u; i++)
         put_step(t2, i, i % 16u == 0u ? 4u : 0u, i < 16u ? AM : FM, i % 16u == 0u ? ST_NOTE : i % 16u < 14u ? ST_TIE : ST_REST, 0);
     t3->p[P_SLEN] = 12;

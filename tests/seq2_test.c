@@ -63,6 +63,10 @@ static void reset(uint32_t bpm)
     nhits = 0;
     blk = 0;
     song.g[G_BPM] = (int16_t)bpm;
+    for (i = 0; i < NTRK; i++)
+        trk[i].p[P_SLEN] = 16;                       /* (INFUR) said, not left to the default: these tests write 16
+                                                      * steps and count bars of 16. LEN defaults to 64 now, so the
+                                                      * test no longer leans on a value it does not set */
     song.rec = 0;
     rec_wait = 0;
     fm1_in.notes = fm1_in.buttons = 0;

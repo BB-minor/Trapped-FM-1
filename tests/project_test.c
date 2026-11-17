@@ -231,7 +231,8 @@ int main(void)
          dstep_rat(&q2.t[TRK_DRUM].dstep[5], 13) == 2u && !memcmp(q2.g, v4.g, sizeof q2.g);
     for (t = 0; t < NTRK; t++) {
         ok &= !memcmp(q2.t[t].p, v4.t[t].p, P_TFLT * 2u) && !memcmp(q2.t[t].e, v4.t[t].p + P_TFLT, 16u) &&
-              q2.t[t].p[P_TFLT] == 0 && q2.t[t].p[P_STRUM] == 0 && q2.t[t].p[P_VLEAD] == 0 &&
+              q2.t[t].p[P_TFLT] == 0 && q2.t[t].p[P_STRUM] == 0 &&
+              q2.t[t].p[P_VLEAD] == TP[P_VLEAD].def &&   /* (INFUR) the default, which is 1 now: format 4 has no VLEAD field */
               !memcmp(q2.t[t].step, v4.t[t].step, sizeof q2.t[t].step);
         for (i = 0; i < NLOCK; i++)
             ok &= q2.t[t].lock[i].step == LOCK_FREE;
